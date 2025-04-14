@@ -33,8 +33,8 @@
   <script>
     const canvas = document.getElementById("gameCanvas");
     const ctx = canvas.getContext("2d");
-    ctx.canvas.width  = window.innerWidth;
-    ctx.canvas.height = window.innerHeight / 2;
+    // ctx.canvas.width  = window.innerWidth;
+    // ctx.canvas.height = window.innerHeight / 2;
 
     // Images
     const cloudImage = new Image();
@@ -42,21 +42,22 @@
 
     const robotImage = new Image();
     robotImage.src = "https://opengameart.org/sites/default/files/robot-preview.png";
+    robotImage.style.border = "1px solid black";
 
-    const groundHeight = 60;
+    const groundHeight = 120;
 
     const robot = {
       x: 100,
       y: 0,
-      width: 60,
-      height: 60,
+      width: 120,
+      height: 120,
       vy: 0,
       jumpPower: -10,
       gravity: 0.5,
       onGround: true,
       ducking: false,
-      normalHeight: 40,
-      duckHeight: 20,
+      normalHeight: 120,
+      duckHeight: 60,
     };
 
     let items = [];
@@ -80,7 +81,7 @@
         x: Math.random() * canvas.width,
         y: Math.random() * 100,
         width: 120 + Math.random() * 60,
-        height: 80,
+        height: 120,
         speed: 0.2 + Math.random() * 0.2
       });
     }
@@ -92,14 +93,14 @@
       const finalValue = is500 ? 500 : value;
 
       const heights = [
-        getGroundLevel(30),
-        getGroundLevel(80),
+        getGroundLevel(70),
+        getGroundLevel(100),
         getGroundLevel(130),
       ];
       const randomY = heights[Math.floor(Math.random() * heights.length)];
 
       items.push({
-        x: canvas.width + 20,
+        x: canvas.width + 5,
         y: randomY,
         width: 30,
         height: 30,
@@ -175,8 +176,8 @@
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       const skyGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-      skyGradient.addColorStop(0, '#333');
-      skyGradient.addColorStop(1, '#222');
+      skyGradient.addColorStop(0, '#cccccc');
+      skyGradient.addColorStop(1, '#eeeeee');
       ctx.fillStyle = skyGradient;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -186,8 +187,8 @@
 
       const groundY = canvas.height - groundHeight;
       const groundGradient = ctx.createLinearGradient(0, groundY, 0, canvas.height);
-      groundGradient.addColorStop(0, '#4a2d1c');
-      groundGradient.addColorStop(1, '#2e1a10');
+      groundGradient.addColorStop(0, '#eeeeee');
+      groundGradient.addColorStop(1, '#cccccc');
       ctx.fillStyle = groundGradient;
       ctx.fillRect(0, groundY, canvas.width, groundHeight);
 
@@ -196,8 +197,8 @@
 
       // Items
       items.forEach(item => {
-        ctx.fillStyle = "#0af";
-        ctx.fillRect(item.x, item.y, item.width, item.height);
+        // ctx.fillStyle = "#0af";
+        // ctx.fillRect(item.x, item.y, item.width, item.height);
         ctx.fillStyle = "#fff";
         ctx.fillText(item.value, item.x + 5, item.y + 20);
       });
