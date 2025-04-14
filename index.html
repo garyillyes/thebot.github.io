@@ -79,8 +79,9 @@
   <script>
     const canvas = document.getElementById("gameCanvas");
     const ctx = canvas.getContext("2d");
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     ctx.canvas.width = window.innerWidth;
-    ctx.canvas.height = window.innerHeight / 2;
+    ctx.canvas.height = isMobile ? window.innerHeight * 0.8 : window.innerHeight / 2;
 
     const cloudImage = new Image();
     cloudImage.src = "cloud.png";
@@ -106,6 +107,13 @@
       duckHeight: 60,
     };
 
+    function getGroundLevel(h) {
+      return canvas.height - groundHeight - h;
+    }
+
+    // Responsive position after canvas height change
+    robot.y = getGroundLevel(robot.height);
+
     let items = [];
     let clouds = [];
     let speed = 3;
@@ -115,12 +123,6 @@
     let frameCount = 0;
 
     const itemValues = [100, 200, 300, 400, 500];
-
-    function getGroundLevel(h) {
-      return canvas.height - groundHeight - h;
-    }
-
-    robot.y = getGroundLevel(robot.height);
 
     const numClouds = Math.floor(window.innerWidth / 200);
     for (let i = 0; i < numClouds; i++) {
@@ -138,7 +140,7 @@
       const is500 = speed > 5 && Math.random() < 0.3;
       const finalValue = is500 ? 500 : value;
       const baseY = getGroundLevel(140);
-      const offset = Math.random() * 60;
+      const offset = 60 + Math.random() * 60; // Spread more vertically
       const randomY = baseY - offset;
       items.push({
         x: canvas.width + 5,
