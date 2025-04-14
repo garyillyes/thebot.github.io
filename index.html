@@ -8,18 +8,52 @@
       margin: 0;
       overflow: hidden;
       font-family: Arial;
-      background-color: #111;
+      background-color: #cccccc;
     }
     canvas {
       display: block;
-      background: #222;
+      background: #cccccc;
+    }
+    #hud, #pauseText, #startScreen, #pauseBtn {
+      position: absolute;
+      color: #111;
+      font-size: 1.5em;
+      font-family: Arial;
+      z-index: 10;
     }
     #hud {
-      position: absolute;
       top: 10px;
       left: 10px;
-      color: white;
-      font-size: 18px;
+    }
+    #pauseText {
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      display: none;
+      font-size: 2em;
+    }
+    #startScreen {
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(255, 255, 255, 0.9);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 2em;
+      box-sizing: border-box;
+    }
+    #pauseBtn {
+      top: 10px;
+      right: 10px;
+      background: #eee;
+      padding: 0.5em 1em;
+      border-radius: 10px;
+      border: 1px solid #aaa;
+      cursor: pointer;
+      user-select: none;
     }
   </style>
 </head>
@@ -28,28 +62,40 @@
     Score: <span id="score">0</span><br />
     Budget: <span id="budget">100</span>
   </div>
-  <canvas id="gameCanvas" width="800" height="400"></canvas>
+  <div id="pauseText">Paused</div>
+  <div id="startScreen">
+    <div>
+      <h1>Robot Collector Game</h1>
+      <p>Collect the 200-value items to score points and increase speed.</p>
+      <p>Avoid too many hits or you’ll run out of budget.</p>
+      <p>Items worth 500 slow you down.</p>
+      <p>Jump: <strong>Space / Tap Left</strong> &nbsp;&nbsp; Duck: <strong>Arrow Down / Touch Right</strong> &nbsp;&nbsp; Pause: <strong>P / Button</strong></p>
+      <p>Press any key or tap to start!</p>
+    </div>
+  </div>
+  <div id="pauseBtn">Pause</div>
+  <canvas id="gameCanvas"></canvas>
 
   <script>
     const canvas = document.getElementById("gameCanvas");
     const ctx = canvas.getContext("2d");
-    // ctx.canvas.width  = window.innerWidth;
-    // ctx.canvas.height = window.innerHeight / 2;
+    ctx.canvas.width = window.innerWidth;
+    ctx.canvas.height = window.innerHeight / 2;
 
-    // Images
     const cloudImage = new Image();
     cloudImage.src = "cloud.png";
 
     const robotImage = new Image();
-    robotImage.src = "https://opengameart.org/sites/default/files/robot-preview.png";
-    robotImage.style.border = "1px solid black";
+    robotImage.src = "robot.png";
 
     const groundHeight = 120;
+    let paused = false;
+    let started = false;
 
     const robot = {
       x: 100,
       y: 0,
-      width: 120,
+      width: 90,
       height: 120,
       vy: 0,
       jumpPower: -10,
@@ -76,7 +122,8 @@
 
     robot.y = getGroundLevel(robot.height);
 
-    for (let i = 0; i < 5; i++) {
+    const numClouds = Math.floor(window.innerWidth / 200);
+    for (let i = 0; i < numClouds; i++) {
       clouds.push({
         x: Math.random() * canvas.width,
         y: Math.random() * 100,
@@ -88,28 +135,22 @@
 
     function spawnItem() {
       const value = itemValues[Math.floor(Math.random() * itemValues.length)];
-      const chance = Math.random();
-      const is500 = speed > 5 && chance < 0.3;
+      const is500 = speed > 5 && Math.random() < 0.3;
       const finalValue = is500 ? 500 : value;
-
-      const heights = [
-        getGroundLevel(70),
-        getGroundLevel(100),
-        getGroundLevel(130),
-      ];
-      const randomY = heights[Math.floor(Math.random() * heights.length)];
-
+      const baseY = getGroundLevel(140);
+      const offset = Math.random() * 60;
+      const randomY = baseY - offset;
       items.push({
         x: canvas.width + 5,
         y: randomY,
         width: 30,
         height: 30,
-        value: finalValue,
+        value: finalValue
       });
     }
 
     function update() {
-      if (gameOver) return;
+      if (!started || gameOver || paused) return;
 
       robot.vy += robot.gravity;
       robot.y += robot.vy;
@@ -192,16 +233,13 @@
       ctx.fillStyle = groundGradient;
       ctx.fillRect(0, groundY, canvas.width, groundHeight);
 
-      // Robot Image
       ctx.drawImage(robotImage, robot.x, robot.y, robot.width, robot.height);
 
-      // Items
-      items.forEach(item => {
-        // ctx.fillStyle = "#0af";
-        // ctx.fillRect(item.x, item.y, item.width, item.height);
-        ctx.fillStyle = "#fff";
-        ctx.fillText(item.value, item.x + 5, item.y + 20);
-      });
+      for (let item of items) {
+        ctx.fillStyle = "#111";
+        ctx.font = "20px Arial";
+        ctx.fillText(item.value, item.x, item.y + item.height);
+      }
     }
 
     function loop() {
@@ -211,11 +249,21 @@
     }
 
     document.addEventListener("keydown", (e) => {
+      if (!started) {
+        started = true;
+        document.getElementById("startScreen").style.display = "none";
+        loop();
+        return;
+      }
       if (e.code === "Space" && robot.onGround && !robot.ducking) {
         robot.vy = robot.jumpPower;
       }
       if (e.code === "ArrowDown") {
         robot.ducking = true;
+      }
+      if (e.code === "KeyP") {
+        paused = !paused;
+        document.getElementById("pauseText").style.display = paused ? "block" : "none";
       }
     });
 
@@ -225,8 +273,33 @@
       }
     });
 
+    document.getElementById("pauseBtn").addEventListener("click", () => {
+      paused = !paused;
+      document.getElementById("pauseText").style.display = paused ? "block" : "none";
+    });
+
+    document.addEventListener("touchstart", (e) => {
+      if (!started) {
+        started = true;
+        document.getElementById("startScreen").style.display = "none";
+        loop();
+        return;
+      }
+      const touchX = e.touches[0].clientX;
+      const halfWidth = window.innerWidth / 2;
+      if (touchX < halfWidth && robot.onGround && !robot.ducking) {
+        robot.vy = robot.jumpPower;
+      } else {
+        robot.ducking = true;
+      }
+    });
+
+    document.addEventListener("touchend", (e) => {
+      robot.ducking = false;
+    });
+
     robotImage.onload = () => {
-      loop();
+      // Waits for key press or tap to start
     };
   </script>
 </body>
