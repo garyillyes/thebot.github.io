@@ -89,7 +89,7 @@
     const robotImage = new Image();
     robotImage.src = "robot.png";
 
-    const groundHeight = 120;
+    const groundHeight = 60; // Updated from 120 to 60 to bring ground closer to bottom
     let paused = false;
     let started = false;
 
@@ -121,6 +121,9 @@
     let budget = 100;
     let gameOver = false;
     let frameCount = 0;
+    let skylineOffset = 0;
+    const skylineSpeed = 0.5; // slower than item speed
+
 
     const itemValues = [100, 200, 300, 400, 500];
 
@@ -139,8 +142,8 @@
       const value = itemValues[Math.floor(Math.random() * itemValues.length)];
       const is500 = speed > 5 && Math.random() < 0.3;
       const finalValue = is500 ? 500 : value;
-      const baseY = getGroundLevel(140);
-      const offset = 60 + Math.random() * 60; // Spread more vertically
+      const baseY = getGroundLevel(90); // closer to robot's height
+      const offset = Math.random() * 120;
       const randomY = baseY - offset;
       items.push({
         x: canvas.width + 5,
@@ -215,34 +218,76 @@
       if (frameCount % 60 === 0) spawnItem();
     }
 
+    function drawSkyline(y) {
+      skylineOffset -= skylineSpeed;
+      if (skylineOffset <= -canvas.width) {
+        skylineOffset = 0;
+      }
+
+      ctx.save();
+      ctx.globalAlpha = 0.3; // Simulates haze
+      ctx.fillStyle = '#bbb'; // Lighter grey for distance
+
+      const skylineHeights = [30, 50, 70, 40, 60, 35];
+      const buildingWidth = 60;
+      const totalBuildings = Math.ceil(canvas.width / buildingWidth) + 2;
+
+      for (let pass = 0; pass < 2; pass++) {
+        for (let i = 0; i < totalBuildings; i++) {
+          const height = skylineHeights[i % skylineHeights.length];
+          const x = i * buildingWidth + skylineOffset + pass * canvas.width;
+          ctx.fillRect(x, y - height, buildingWidth - 10, height);
+        }
+      }
+
+      ctx.restore();
+    }
+
+
     function draw() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+      // Sky gradient background
       const skyGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
       skyGradient.addColorStop(0, '#cccccc');
       skyGradient.addColorStop(1, '#eeeeee');
       ctx.fillStyle = skyGradient;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+      // Clouds
       for (let cloud of clouds) {
         ctx.drawImage(cloudImage, cloud.x, cloud.y, cloud.width, cloud.height);
       }
 
-      const groundY = canvas.height - groundHeight;
-      const groundGradient = ctx.createLinearGradient(0, groundY, 0, canvas.height);
+      // Horizon line
+      const horizonY = canvas.height - groundHeight;
+      ctx.strokeStyle = '#999';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, horizonY);
+      ctx.lineTo(canvas.width, horizonY);
+      ctx.stroke();
+      // City skyline silhouette (parallax)
+      drawSkyline(horizonY);
+
+      // Ground
+      const groundGradient = ctx.createLinearGradient(0, horizonY, 0, canvas.height);
       groundGradient.addColorStop(0, '#eeeeee');
       groundGradient.addColorStop(1, '#cccccc');
       ctx.fillStyle = groundGradient;
-      ctx.fillRect(0, groundY, canvas.width, groundHeight);
+      ctx.fillRect(0, horizonY, canvas.width, groundHeight);
 
+      // Robot
       ctx.drawImage(robotImage, robot.x, robot.y, robot.width, robot.height);
 
+      // Falling item numbers
       for (let item of items) {
         ctx.fillStyle = "#111";
         ctx.font = "20px Arial";
         ctx.fillText(item.value, item.x, item.y + item.height);
       }
     }
+
 
     function loop() {
       update();
