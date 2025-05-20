@@ -2,139 +2,95 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>Cyberpunk Page Sorter</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Scroll Sorter Game</title>
   <style>
     html, body {
       margin: 0;
       padding: 0;
-      height: 100vh;
-      background: #0d0d0d;
-      font-family: monospace;
-      overflow: hidden;
+      height: 100%;
+      background: #111;
+      font-family: sans-serif;
+      color: white;
       display: flex;
-      align-items: center;
+      flex-direction: column;
       justify-content: center;
+      align-items: center;
     }
 
     #introScreen {
       position: absolute;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
-      background: #000c;
+      inset: 0;
+      background: #111;
       color: white;
       display: flex;
       flex-direction: column;
       justify-content: center;
       align-items: center;
       z-index: 10;
-      text-align: center;
-      padding: 2rem;
     }
 
-    #introScreen button {
-      padding: 1rem 2rem;
-      font-size: 1.2rem;
-      margin-top: 1.5rem;
-      background: #0ff;
-      color: #000;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-    }
-
-    #gameContainer {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: flex-start;
-      width: 100vw;
-      height: 100vh;
-      padding: 1rem;
-      box-sizing: border-box;
-    }
-
-    canvas {
-      max-width: 100%;
-      height: auto;
-      background: transparent;
+    #gameCanvas {
+      background: #222;
       display: block;
+      max-width: 100vw;
+      height: auto;
     }
 
-    #controls {
+    #scoreBoard {
+      margin: 10px 0;
+      font-size: 1.2rem;
+    }
+
+    .buttons {
+      margin-top: 10px;
       display: flex;
-      gap: 1rem;
+      gap: 20px;
       justify-content: center;
-      margin-top: 1rem;
       flex-wrap: wrap;
     }
 
-    #hud {
-      color: #0ff;
+    .buttons button {
+      padding: 12px 24px;
       font-size: 1.2rem;
-      margin-top: 0.5rem;
-      text-align: center;
-    }
-
-
-    button {
-      padding: 1rem 2rem;
-      font-size: 1.2rem;
-      background: #0ff;
-      color: #000;
+      background-color: #0ff;
       border: none;
+      color: #000;
       border-radius: 8px;
       cursor: pointer;
-      min-width: 100px;
+    }
+
+    .buttons button:hover {
+      background-color: #0cc;
     }
 
     @media (orientation: landscape) {
-      #gameContainer {
+      .buttons {
         flex-direction: row;
-        justify-content: space-around;
-        align-items: center;
-        padding: 1rem;
       }
+    }
 
-      canvas {
-        max-width: 60vw;
-        max-height: 90vh;
-      }
-
-      #controls {
+    @media (orientation: portrait) {
+      .buttons {
         flex-direction: column;
-        margin: 0;
-      }
-
-      #hud {
-        margin-bottom: 1rem;
       }
     }
   </style>
 </head>
 <body>
   <div id="introScreen">
-    <h1>Cyberpunk Page Sorter</h1>
-    <p>Sort pages as they arrive on the conveyor belt.<br><br>
-      <strong>Rules:</strong><br>
-      ✔ Keep pages with status <strong>200</strong> that are <strong>not error pages</strong><br>
-      ✔ High = 3 pts, Medium = 2 pts, Low = 1 pt<br>
-      ✔ Discarding bad pages earns you 1 pt<br><br>
-      <em>Tap "Keep" or "Discard" on each page. You have 100 seconds!</em>
-    </p>
+    <h1>Scroll Sorter</h1>
+    <p>Keep only high-quality, non-error pages with status code 200.</p>
     <button onclick="startGame()">Start Game</button>
   </div>
 
-  <div id="gameContainer">
-    <canvas id="gameCanvas" width="800" height="500"></canvas>
-  
-    <div id="hud">
+  <canvas id="gameCanvas" width="640" height="360"></canvas>
+
+  <div id="gameUI">
+    <div id="scoreBoard">
       Score: <span id="score">0</span> | Time: <span id="timer">100</span>
     </div>
-  
-    <div id="controls">
+    <div class="buttons">
       <button onclick="keepPage()">Keep</button>
       <button onclick="discardPage()">Discard</button>
     </div>

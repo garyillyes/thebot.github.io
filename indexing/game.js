@@ -6,10 +6,12 @@ let timeLeft = 100;
 let activePage = null;
 let gameInterval, timerInterval;
 let scrollImage = new Image();
-scrollImage.src = "scroll.png"; // Make sure this file is in the same directory
+scrollImage.src = "scroll.png"; // Make sure this is in the same directory
 
 function startGame() {
   document.getElementById("introScreen").style.display = "none";
+  document.getElementById("gameUI").style.display = "block";
+
   score = 0;
   timeLeft = 100;
   activePage = null;
@@ -29,20 +31,17 @@ function endGame() {
   clearInterval(timerInterval);
   alert("Time's up! Final Score: " + score);
   document.getElementById("introScreen").style.display = "flex";
+  document.getElementById("gameUI").style.display = "none";
 }
 
 function spawnPage() {
-  activePage = randomPage();
-}
-
-function randomPage() {
   const statusCodes = [200, 200, 200, 200, 301, 302, 404, 410, 418, 500, 503];
-  return {
+  activePage = {
     statusCode: statusCodes[Math.floor(Math.random() * statusCodes.length)],
     isErrorPage: Math.random() < 0.3,
     quality: ["high", "medium", "low"][Math.floor(Math.random() * 3)],
     x: -150,
-    y: canvas.height / 2 - 100,
+    y: 100,
     width: 100,
     height: 140,
     state: "scrollIn",
@@ -60,7 +59,7 @@ function updateGame() {
     updatePageState(activePage);
     drawPage(activePage);
 
-    if (activePage.x > canvas.width) {
+    if (activePage.x > canvas.width + 100) {
       activePage = null;
     }
   } else {
@@ -72,7 +71,7 @@ function updatePageState(page) {
   switch (page.state) {
     case "scrollIn":
       page.x += 4;
-      if (page.x + page.width / 2 >= canvas.width / 2) {
+      if (page.x >= canvas.width / 2 - page.width / 2) {
         page.state = "focus";
         page.stateTimer = 0;
       }
@@ -83,7 +82,6 @@ function updatePageState(page) {
         page.state = "scrollOut";
         return;
       }
-
       if (page.scale < 1.2) {
         page.scale += 0.01;
       } else {
@@ -96,7 +94,7 @@ function updatePageState(page) {
       break;
 
     case "decision":
-      // Waits for user input
+      // Wait for user input
       break;
 
     case "scrollOut":
@@ -109,15 +107,8 @@ function updatePageState(page) {
 }
 
 function drawConveyorBelt() {
-  ctx.fillStyle = "#333";
-  const beltY = canvas.height / 2 + 40;
-  ctx.fillRect(0, beltY, canvas.width, 40);
-
-  // Draw neon stripes
-  for (let i = 0; i < canvas.width; i += 40) {
-    ctx.fillStyle = i % 80 === 0 ? "#0ff" : "#099";
-    ctx.fillRect(i, beltY + 15, 20, 10);
-  }
+  ctx.fillStyle = "#444";
+  ctx.fillRect(0, 260, canvas.width, 40);
 }
 
 function drawPage(page) {
@@ -133,12 +124,11 @@ function drawPage(page) {
     ctx.fillRect(0, 0, page.width, page.height);
   }
 
-  // Text
   ctx.fillStyle = "#000";
   ctx.font = "10px monospace";
-  ctx.fillText(`Status: ${page.statusCode}`, 6, 20);
-  ctx.fillText(`Error: ${page.isErrorPage ? "Yes" : "No"}`, 6, 35);
-  ctx.fillText(`Quality: ${page.quality}`, 6, 50);
+  ctx.fillText(`Status: ${page.statusCode}`, 8, 15);
+  ctx.fillText(`Error: ${page.isErrorPage ? "Yes" : "No"}`, 8, 30);
+  ctx.fillText(`Quality: ${page.quality}`, 8, 45);
 
   ctx.restore();
 }
@@ -146,40 +136,35 @@ function drawPage(page) {
 function keepPage() {
   if (!activePage || activePage.state === "scrollOut") return;
 
-  if (!activePage._decisionMade) {
-    const { statusCode, isErrorPage, quality } = activePage;
+  const { statusCode, isErrorPage, quality } = activePage;
 
+  if (!activePage._decisionMade) {
     if (statusCode === 200 && !isErrorPage) {
       if (quality === "high") score += 3;
       else if (quality === "medium") score += 2;
       else if (quality === "low") score += 1;
     }
-
-    document.getElementById("score").textContent = score;
     activePage._decisionMade = true;
+    activePage.state = "scrollOut";
+    document.getElementById("score").textContent = score;
   }
-
-  activePage.state = "scrollOut";
 }
 
 function discardPage() {
   if (!activePage || activePage.state === "scrollOut") return;
 
+  const { statusCode, isErrorPage } = activePage;
+
   if (!activePage._decisionMade) {
-    const { statusCode, isErrorPage } = activePage;
-
     if (statusCode !== 200 || isErrorPage) {
-      score += 1;
+      score += 1; // Reward correct discard
     }
-
-    document.getElementById("score").textContent = score;
     activePage._decisionMade = true;
+    activePage.state = "scrollOut";
+    document.getElementById("score").textContent = score;
   }
-
-  activePage.state = "scrollOut";
 }
 
-// Optional: keyboard support for desktop
 document.addEventListener("keydown", (e) => {
   if (e.key === "k") keepPage();
   if (e.key === "d") discardPage();
