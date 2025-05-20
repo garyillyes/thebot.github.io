@@ -49,14 +49,16 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
+      justify-content: flex-start;
       width: 100vw;
       height: 100vh;
+      padding: 1rem;
+      box-sizing: border-box;
     }
 
     canvas {
       max-width: 100%;
-      max-height: 70vh;
+      height: auto;
       background: transparent;
       display: block;
     }
@@ -64,10 +66,18 @@
     #controls {
       display: flex;
       gap: 1rem;
-      flex-wrap: wrap;
       justify-content: center;
       margin-top: 1rem;
+      flex-wrap: wrap;
     }
+
+    #hud {
+      color: #0ff;
+      font-size: 1.2rem;
+      margin-top: 0.5rem;
+      text-align: center;
+    }
+
 
     button {
       padding: 1rem 2rem;
@@ -78,13 +88,6 @@
       border-radius: 8px;
       cursor: pointer;
       min-width: 100px;
-    }
-
-    #hud {
-      color: #0ff;
-      font-size: 1.2rem;
-      margin-top: 0.5rem;
-      text-align: center;
     }
 
     @media (orientation: landscape) {
@@ -126,12 +129,14 @@
 
   <div id="gameContainer">
     <canvas id="gameCanvas" width="800" height="500"></canvas>
+  
+    <div id="hud">
+      Score: <span id="score">0</span> | Time: <span id="timer">100</span>
+    </div>
+  
     <div id="controls">
       <button onclick="keepPage()">Keep</button>
       <button onclick="discardPage()">Discard</button>
-      <div id="hud">
-        Score: <span id="score">0</span> | Time: <span id="timer">100</span>
-      </div>
     </div>
   </div>
 
