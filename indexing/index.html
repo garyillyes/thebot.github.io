@@ -1,20 +1,48 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Cyberpunk Page Sorter</title>
   <style>
     html, body {
       margin: 0;
       padding: 0;
+      height: 100vh;
       background: #0d0d0d;
-      color: white;
       font-family: monospace;
       overflow: hidden;
-      height: 100vh;
       display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #introScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: #000c;
+      color: white;
+      display: flex;
+      flex-direction: column;
       justify-content: center;
       align-items: center;
-      flex-direction: column;
+      z-index: 10;
+      text-align: center;
+      padding: 2rem;
+    }
+
+    #introScreen button {
+      padding: 1rem 2rem;
+      font-size: 1.2rem;
+      margin-top: 1.5rem;
+      background: #0ff;
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
     }
 
     #gameContainer {
@@ -24,22 +52,21 @@
       justify-content: center;
       width: 100vw;
       height: 100vh;
-      box-sizing: border-box;
     }
 
     canvas {
-      max-width: 100vw;
+      max-width: 100%;
       max-height: 70vh;
       background: transparent;
       display: block;
     }
 
     #controls {
-      margin-top: 10px;
       display: flex;
-      gap: 20px;
+      gap: 1rem;
       flex-wrap: wrap;
       justify-content: center;
+      margin-top: 1rem;
     }
 
     button {
@@ -53,34 +80,61 @@
       min-width: 100px;
     }
 
+    #hud {
+      color: #0ff;
+      font-size: 1.2rem;
+      margin-top: 0.5rem;
+      text-align: center;
+    }
+
     @media (orientation: landscape) {
       #gameContainer {
         flex-direction: row;
-        justify-content: space-evenly;
+        justify-content: space-around;
         align-items: center;
+        padding: 1rem;
       }
 
       canvas {
-        max-height: 80vh;
         max-width: 60vw;
+        max-height: 90vh;
       }
 
       #controls {
         flex-direction: column;
-        gap: 20px;
         margin: 0;
+      }
+
+      #hud {
+        margin-bottom: 1rem;
       }
     }
   </style>
 </head>
 <body>
+  <div id="introScreen">
+    <h1>Cyberpunk Page Sorter</h1>
+    <p>Sort pages as they arrive on the conveyor belt.<br><br>
+      <strong>Rules:</strong><br>
+      ✔ Keep pages with status <strong>200</strong> that are <strong>not error pages</strong><br>
+      ✔ High = 3 pts, Medium = 2 pts, Low = 1 pt<br>
+      ✔ Discarding bad pages earns you 1 pt<br><br>
+      <em>Tap "Keep" or "Discard" on each page. You have 100 seconds!</em>
+    </p>
+    <button onclick="startGame()">Start Game</button>
+  </div>
+
   <div id="gameContainer">
     <canvas id="gameCanvas" width="800" height="500"></canvas>
     <div id="controls">
       <button onclick="keepPage()">Keep</button>
       <button onclick="discardPage()">Discard</button>
+      <div id="hud">
+        Score: <span id="score">0</span> | Time: <span id="timer">100</span>
+      </div>
     </div>
   </div>
+
   <script src="game.js"></script>
 </body>
 </html>
