@@ -5,12 +5,8 @@ let score = 0;
 let timeLeft = 100;
 let activePage = null;
 let gameInterval, timerInterval;
-let beltOffset = 0;
-
-const scrollImage = new Image();
-scrollImage.src = "scroll.png"; // Make sure this image is in the same folder as your HTML
-
-scrollImage.onload = () => console.log("Scroll image loaded");
+let scrollImage = new Image();
+scrollImage.src = "scroll.png"; // Make sure this file is in the same directory
 
 function startGame() {
   document.getElementById("introScreen").style.display = "none";
@@ -46,9 +42,9 @@ function randomPage() {
     isErrorPage: Math.random() < 0.3,
     quality: ["high", "medium", "low"][Math.floor(Math.random() * 3)],
     x: -150,
-    y: 120,
+    y: canvas.height / 2 - 100,
     width: 100,
-    height: 134,
+    height: 140,
     state: "scrollIn",
     stateTimer: 0,
     scale: 1,
@@ -58,12 +54,7 @@ function randomPage() {
 
 function updateGame() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  let conveyorShouldMove = !activePage || (activePage.state !== "focus" && activePage.state !== "decision");
-  if (conveyorShouldMove) {
-    beltOffset += 2;
-  }
   drawConveyorBelt();
-
 
   if (activePage) {
     updatePageState(activePage);
@@ -81,7 +72,7 @@ function updatePageState(page) {
   switch (page.state) {
     case "scrollIn":
       page.x += 4;
-      if (page.x >= (canvas.width / 2) - (page.width / 2)) {
+      if (page.x + page.width / 2 >= canvas.width / 2) {
         page.state = "focus";
         page.stateTimer = 0;
       }
@@ -92,6 +83,7 @@ function updatePageState(page) {
         page.state = "scrollOut";
         return;
       }
+
       if (page.scale < 1.2) {
         page.scale += 0.01;
       } else {
@@ -104,6 +96,7 @@ function updatePageState(page) {
       break;
 
     case "decision":
+      // Waits for user input
       break;
 
     case "scrollOut":
@@ -116,35 +109,36 @@ function updatePageState(page) {
 }
 
 function drawConveyorBelt() {
-  ctx.fillStyle = "#222";
-  ctx.fillRect(0, 250, canvas.width, 30);
+  ctx.fillStyle = "#333";
+  const beltY = canvas.height / 2 + 40;
+  ctx.fillRect(0, beltY, canvas.width, 40);
 
-  // add stripes
+  // Draw neon stripes
   for (let i = 0; i < canvas.width; i += 40) {
-    ctx.fillStyle = "#0ff2";
-    ctx.fillRect((i + beltOffset) % canvas.width, 250, 20, 30);
+    ctx.fillStyle = i % 80 === 0 ? "#0ff" : "#099";
+    ctx.fillRect(i, beltY + 15, 20, 10);
   }
 }
 
 function drawPage(page) {
-  if (!scrollImage.complete) return;
-
-  const drawWidth = page.width;
-  const drawHeight = page.height;
-
   ctx.save();
-  ctx.translate(page.x + drawWidth / 2, page.y + drawHeight / 2);
+  ctx.translate(page.x + page.width / 2, page.y + page.height / 2);
   ctx.scale(page.scale, page.scale);
-  ctx.translate(-drawWidth / 2, -drawHeight / 2);
+  ctx.translate(-page.width / 2, -page.height / 2);
 
-  ctx.drawImage(scrollImage, 0, 0, drawWidth, drawHeight);
+  if (scrollImage.complete) {
+    ctx.drawImage(scrollImage, 0, 0, page.width, page.height);
+  } else {
+    ctx.fillStyle = "#e3dcc5";
+    ctx.fillRect(0, 0, page.width, page.height);
+  }
 
-  // Overlay text
+  // Text
   ctx.fillStyle = "#000";
   ctx.font = "10px monospace";
-  ctx.fillText(`Status: ${page.statusCode}`, 10, 20);
-  ctx.fillText(`Error: ${page.isErrorPage ? "Yes" : "No"}`, 10, 35);
-  ctx.fillText(`Quality: ${page.quality}`, 10, 50);
+  ctx.fillText(`Status: ${page.statusCode}`, 6, 20);
+  ctx.fillText(`Error: ${page.isErrorPage ? "Yes" : "No"}`, 6, 35);
+  ctx.fillText(`Quality: ${page.quality}`, 6, 50);
 
   ctx.restore();
 }
@@ -154,12 +148,14 @@ function keepPage() {
 
   if (!activePage._decisionMade) {
     const { statusCode, isErrorPage, quality } = activePage;
+
     if (statusCode === 200 && !isErrorPage) {
       if (quality === "high") score += 3;
       else if (quality === "medium") score += 2;
       else if (quality === "low") score += 1;
-      document.getElementById("score").textContent = score;
     }
+
+    document.getElementById("score").textContent = score;
     activePage._decisionMade = true;
   }
 
@@ -168,19 +164,22 @@ function keepPage() {
 
 function discardPage() {
   if (!activePage || activePage.state === "scrollOut") return;
+
   if (!activePage._decisionMade) {
     const { statusCode, isErrorPage } = activePage;
-    // Award 1 point for correctly discarding a bad page
+
     if (statusCode !== 200 || isErrorPage) {
       score += 1;
-      document.getElementById("score").textContent = score;
     }
+
+    document.getElementById("score").textContent = score;
     activePage._decisionMade = true;
   }
+
   activePage.state = "scrollOut";
 }
 
-
+// Optional: keyboard support for desktop
 document.addEventListener("keydown", (e) => {
   if (e.key === "k") keepPage();
   if (e.key === "d") discardPage();

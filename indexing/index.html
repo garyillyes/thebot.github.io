@@ -2,81 +2,91 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Cyberpunk Page Sorter</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Page Sorter Game</title>
   <style>
     html, body {
       margin: 0;
       padding: 0;
       height: 100%;
-      overflow: hidden;
-      font-family: monospace;
-      background: black;
-      color: #00ffcc;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-    }
-
-    #container {
+      background-color: #0f0f1f;
       display: flex;
       flex-direction: column;
       align-items: center;
-    }
-
-    canvas {
-      border: 2px solid #0ff;
-      background: #111;
-      display: block;
-    }
-
-    #ui {
-      margin-top: 10px;
-      font-size: 18px;
+      justify-content: center;
+      font-family: sans-serif;
+      color: #00ffcc;
+      overflow: hidden;
     }
 
     #introScreen {
       position: absolute;
-      top: 0; left: 0; right: 0; bottom: 0;
       background: rgba(0, 0, 0, 0.9);
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      flex-direction: column;
-      color: #0ff;
-      z-index: 10;
-      text-align: center;
+      color: #fff;
       padding: 2rem;
+      border-radius: 10px;
+      text-align: center;
+      z-index: 10;
+    }
+
+    canvas {
+      border: 2px solid #00ffcc;
+      background-color: #121221;
+      max-width: 100%;
+      height: auto;
+    }
+
+    #ui {
+      margin-top: 10px;
+      display: flex;
+      gap: 20px;
+      justify-content: center;
+      flex-wrap: wrap;
     }
 
     button {
-      margin-top: 1rem;
-      padding: 0.5rem 1rem;
-      background: #0ff;
+      font-size: 18px;
+      padding: 10px 20px;
+      background-color: #00ffcc;
       border: none;
+      border-radius: 6px;
       color: #000;
       font-weight: bold;
       cursor: pointer;
+    }
+
+    @media (max-width: 600px) {
+      button {
+        font-size: 16px;
+        padding: 8px 16px;
+      }
+
+      #introScreen {
+        font-size: 14px;
+        padding: 1rem;
+      }
     }
   </style>
 </head>
 <body>
   <div id="introScreen">
-    <h1>Should we index?</h1>
-    <p>Pages Googlebot crawled arrive on a conveyor belt.</p>
-    <p>You must decide whether to <strong>keep (K)</strong> or <strong>discard (D)</strong> them.</p>
-    <p>Pages with <strong>Status 200</strong> and <strong>not error pages</strong> count.</p>
-    <p>High = 3 pts, Medium = 2 pts, Low = 1 pt</p>
-    <p>You also get 1 point for correctly discarding a non indexable page.</p>
-    <p>Game lasts 100 seconds. Good luck!</p>
-    <button onclick="startGame()">Start Game</button>
+    <h1>📜 Page Sorting Game</h1>
+    <p>Sort pages coming in on the conveyor belt:</p>
+    <ul style="text-align:left;">
+      <li><strong>Keep</strong> high-quality, non-error pages with status <code>200</code></li>
+      <li><strong>Discard</strong> anything else</li>
+    </ul>
+    <p>Touch "Start" to begin. Tap buttons to sort pages.</p>
+    <button onclick="startGame()">Start</button>
   </div>
 
-  <div id="container">
-    <canvas id="gameCanvas" width="800" height="400"></canvas>
-    <div id="ui">
-      Score: <span id="score">0</span> |
-      Time Left: <span id="timer">100</span>
-    </div>
+  <canvas id="gameCanvas" width="800" height="400"></canvas>
+
+  <div id="ui">
+    <div>Score: <span id="score">0</span></div>
+    <div>Time: <span id="timer">100</span></div>
+    <button onclick="keepPage()">Keep ✅</button>
+    <button onclick="discardPage()">Discard ❌</button>
   </div>
 
   <script src="game.js"></script>
