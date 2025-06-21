@@ -346,10 +346,14 @@ function drawRobotArm() {
       const releaseX = pageRestingX;
       const releaseY = pageRestingY;
 
-      // Define the point the arm extends to during the toss
+      // Define the point the arm extends to during the toss.
+      // Scale toss animation distance based on canvas size for responsiveness.
+      const tossXOffset = canvas.width * 0.15; // 15% of canvas width
+      const tossYOffset = canvas.height * 0.15; // 15% of canvas height
+
       const followThroughTargetX =
-        releaseX + (activePage._moveDirection === "discard" ? -150 : 150);
-      const followThroughTargetY = releaseY + 100;
+        releaseX + (activePage._moveDirection === "discard" ? -tossXOffset : tossXOffset);
+      const followThroughTargetY = releaseY + tossYOffset;
 
       // Default resting position for the arm
       const restingArmX = shoulderX;
