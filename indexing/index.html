@@ -86,15 +86,14 @@
 
   <canvas id="gameCanvas" width="640" height="360"></canvas>
 
-  <div id="gameUI">
-    <div id="scoreBoard">
-      Score: <span id="score">0</span> | Time: <span id="timer">100</span>
-    </div>
-    <div class="buttons">
-      <button onclick="keepPage()">Keep</button>
-      <button onclick="discardPage()">Discard</button>
-    </div>
+<div id="gameUI">
+  <div id="scorePanel" style="display: flex; gap: 20px; align-items: center;">
+    <div>Score: <span id="score">0</span></div>
+    <div>Time: <span id="timer">100</span></div>
+    <div id="combo" style="visibility: hidden; font-weight: bold;">Combo x1</div>
   </div>
+</div>
+
 
   <script src="game.js"></script>
 </body>
