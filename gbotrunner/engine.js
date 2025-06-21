@@ -23,6 +23,14 @@
     this.snackbarEl = null;
     this.detailsButton = this.outerContainerEl.querySelector("#details-button");
 
+    // Set start message for desktop; mobile is now the default in HTML.
+    if (!IS_MOBILE) {
+      var messageBox = document.getElementById("messageBox");
+      if (messageBox) {
+        messageBox.querySelector("h1").textContent = "Press Space to start";
+      }
+    }
+
     this.config = opt_config || Runner.config;
 
     this.dimensions = Runner.defaultDimensions;
@@ -363,7 +371,6 @@
       // Hide the static icon.
       document.querySelector("." + Runner.classes.ICON).style.visibility =
         "hidden";
-
       this.adjustDimensions();
       this.setSpeed();
 
@@ -468,7 +475,10 @@
         this.budgetBar.calcXPos(this.dimensions.WIDTH);
         this.clearCanvas();
         this.horizon.update(0, 0, true);
-        this.tRex.update(0);
+        // Don't call update as it's stateful and doesn't always draw.
+        // Instead, just draw the T-Rex in its current animation frame.
+        // This prevents the flickering on load.
+        this.tRex.draw(this.tRex.currentAnimFrames[this.tRex.currentFrame], 0);
 
         // Outer container and distance meter.
         if (this.playing || this.crashed || this.paused) {
@@ -478,7 +488,6 @@
           this.budgetBar.update(this.budget);
           this.stop();
         } else {
-          this.tRex.draw(0, 0);
         }
       }
     },
@@ -514,8 +523,7 @@
           this.startGame.bind(this)
         );
 
-        this.containerEl.style.webkitAnimation = "intro .4s ease-out 1 both";
-        this.containerEl.style.width = this.dimensions.WIDTH + "px";
+        this.containerEl.style.webkitAnimation = "intro .6s ease-in-out 1 both";
 
         // if (this.touchController) {
         //     this.outerContainerEl.appendChild(this.touchController);
@@ -535,7 +543,9 @@
       this.runningTime = 0;
       this.playingIntro = false;
       this.tRex.playingIntro = false;
-      this.containerEl.style.webkitAnimation = "";
+      // Set the final width after the animation has finished.
+      this.containerEl.style.width = this.dimensions.WIDTH + "px";
+      this.containerEl.style.webkitAnimation = ""; // Now clear the animation.
       this.playCount++;
 
       // Handle tabbing off the page. Pause the current game.
@@ -653,7 +663,6 @@
             }
             this.horizon.removeFirstObstacle(); // Remove the obstacle after collision
             vibrate(200); // Vibrate on any hit
-            // The game no longer ends on collision, T-Rex continues running.
           }
         }
       }
@@ -809,6 +818,12 @@
             e.type == Runner.events.TOUCHSTART)
         ) {
           if (!this.playing) {
+            // Hide the initial message box on game start.
+            var box = document.getElementById("messageBox");
+            if (box) {
+              box.style.visibility = "hidden";
+            }
+
             this.loadSounds();
             this.playing = true;
             this.update();
@@ -816,10 +831,30 @@
               errorPageController.trackEasterEgg();
             }
           }
-          //  Play sound effect and jump on starting the game for the first time.
-          if (!this.tRex.jumping && !this.tRex.ducking) {
-            this.playSound(this.soundFx.BUTTON_PRESS);
-            this.tRex.startJump(this.currentSpeed);
+          // Handle touch input for jump/duck
+          if (e.type == Runner.events.TOUCHSTART) {
+            const touchX = e.touches[0].clientX;
+            const halfWidth = this.dimensions.WIDTH / 2;
+
+            if (touchX < halfWidth) {
+              // Left side tap: JUMP
+              if (!this.tRex.jumping && !this.tRex.ducking) {
+                this.playSound(this.soundFx.BUTTON_PRESS);
+                this.tRex.startJump(this.currentSpeed);
+              }
+            } else if (this.tRex.jumping) {
+              // Right side tap while jumping: Speed drop
+              this.tRex.setSpeedDrop();
+            } else if (!this.tRex.ducking) {
+              // Right side tap while on ground: Duck
+              this.tRex.setDuck(true);
+            }
+          } else {
+            // Keyboard jump
+            if (!this.tRex.jumping && !this.tRex.ducking) {
+              this.playSound(this.soundFx.BUTTON_PRESS);
+              this.tRex.startJump(this.currentSpeed);
+            }
           }
         }
 
@@ -850,30 +885,44 @@
      */
     onKeyUp: function (e) {
       var keyCode = String(e.keyCode);
-      var isjumpKey =
-        Runner.keycodes.JUMP[keyCode] ||
-        e.type == Runner.events.TOUCHEND ||
-        e.type == Runner.events.MOUSEDOWN;
+      var isKeyboardJump = Runner.keycodes.JUMP[keyCode];
+      var isKeyboardDuck = Runner.keycodes.DUCK[keyCode];
+      var isMouseEvent = e.type == Runner.events.MOUSEDOWN;
 
-      if (this.isRunning() && isjumpKey) {
+      // Handle touchend for all relevant states.
+      if (e.type == Runner.events.TOUCHEND) {
+        if (this.crashed) {
+          var deltaTime = getTimeStamp() - this.time;
+          if (deltaTime >= this.config.GAMEOVER_CLEAR_TIME) {
+            this.restart();
+          }
+        } else if (this.paused) {
+          this.tRex.reset();
+          this.play();
+        } else if (this.isRunning()) {
+          this.tRex.endJump();
+          this.tRex.speedDrop = false;
+          this.tRex.setDuck(false);
+        }
+        return; // Done with touch event
+      }
+
+      // Handle keyboard/mouse events
+      if (this.isRunning() && (isKeyboardJump || isMouseEvent)) {
         this.tRex.endJump();
-      } else if (Runner.keycodes.DUCK[keyCode]) {
+      } else if (isKeyboardDuck) {
         this.tRex.speedDrop = false;
         this.tRex.setDuck(false);
       } else if (this.crashed) {
-        // Check that enough time has elapsed before allowing jump key to restart.
         var deltaTime = getTimeStamp() - this.time;
-
         if (
           Runner.keycodes.RESTART[keyCode] ||
           this.isLeftClickOnCanvas(e) ||
-          (deltaTime >= this.config.GAMEOVER_CLEAR_TIME &&
-            Runner.keycodes.JUMP[keyCode])
+          (deltaTime >= this.config.GAMEOVER_CLEAR_TIME && isKeyboardJump)
         ) {
           this.restart();
         }
-      } else if (this.paused && isjumpKey) {
-        // Reset the jump state
+      } else if (this.paused && (isKeyboardJump || isMouseEvent)) {
         this.tRex.reset();
         this.play();
       }
@@ -1603,7 +1652,7 @@
        */
       update: function (deltaTime, speed) {
         if (!this.remove) {
-          this.xPos -= Math.floor(((speed * FPS) / 1000) * deltaTime);
+          this.xPos -= ((speed * FPS) / 1000) * deltaTime;
           this.draw();
 
           if (!this.isVisible()) {
@@ -1806,13 +1855,8 @@
         );
       }
 
-      if (this.status == Trex.status.WAITING) {
-        this.blink(getTimeStamp());
-      } else {
-        this.draw(this.currentAnimFrames[this.currentFrame], 0);
-      }
-
-      // Update the frame position.
+      // Update the frame position. The blink function is a timer for the WAITING
+      // state, and the regular timer is used for all other states.
       if (this.timer >= this.msPerFrame) {
         this.currentFrame =
           this.currentFrame == this.currentAnimFrames.length - 1
@@ -1821,7 +1865,12 @@
         this.timer = 0;
       }
 
-      // Speed drop becomes duck if the down key is still being pressed.
+      if (this.status == Trex.status.WAITING) {
+        this.blink(getTimeStamp());
+      } else {
+        // This draw call is now handled below, unconditionally.
+      }
+      this.draw(this.currentAnimFrames[this.currentFrame], 0);
       if (this.speedDrop && this.yPos == this.groundYPos) {
         this.speedDrop = false;
         this.setDuck(true);
@@ -1901,8 +1950,6 @@
       var deltaTime = time - this.animStartTime;
 
       if (deltaTime >= this.blinkDelay) {
-        this.draw(this.currentAnimFrames[this.currentFrame], 0);
-
         if (this.currentFrame == 1) {
           // Set new random delay to blink.
           this.setBlinkDelay();
@@ -2750,7 +2797,7 @@
      * @param {number} speed
      */
     update: function (deltaTime, speed) {
-      var increment = Math.floor(speed * (FPS / 1000) * deltaTime);
+      var increment = speed * (FPS / 1000) * deltaTime;
 
       if (this.xPos[0] <= 0) {
         this.updateXPos(0, increment);
@@ -2979,8 +3026,4 @@
   };
 })();
 
-function onDocumentLoad() {
-  new Runner(".interstitial-wrapper");
-}
-
-document.addEventListener("DOMContentLoaded", onDocumentLoad);
+new Runner(".interstitial-wrapper");

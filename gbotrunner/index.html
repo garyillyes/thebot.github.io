@@ -12,13 +12,12 @@
       href="https://fonts.googleapis.com/css?family=Open+Sans"
       rel="stylesheet"
     />
-    <script src="engine.js"></script>
   </head>
 
   <body id="t" class="offline">
     <div id="messageBox" class="sendmessage">
       <h1 style="text-align: center; font-family: 'Open Sans', sans-serif">
-        Press Space to start
+        Tap to start
       </h1>
       <div class="niokbutton" onclick="okbuttonsend()"></div>
     </div>
@@ -52,14 +51,5 @@
       </div>
     </div>
   </body>
-
-  <script>
-    document.onkeydown = function (evt) {
-      evt = evt || window.event;
-      if (evt.keyCode == 32) {
-        var box = document.getElementById("messageBox");
-        box.style.visibility = "hidden";
-      }
-    };
-  </script>
+  <script src="engine.js"></script>
 </html>
