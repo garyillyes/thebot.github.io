@@ -81,7 +81,14 @@
   <body>
     <div id="introScreen">
       <h1>Indexing</h1>
-      <p>Keep only high-quality, non-error pages with status code 200.</p>
+      <p>
+        Put high-quality, non-error pages in the index, throw everything else in
+        the garbage.
+      </p>
+      <p>
+        Aim for combos! The more correct decisions you make, the higher your
+        combo gets.
+      </p>
       <button onclick="startGame()">Start Game</button>
     </div>
 
@@ -101,10 +108,16 @@
         </div>
       </div>
       <div class="buttons">
-        <button onclick="keepPage()">Keep</button>
         <button onclick="discardPage()">Discard</button>
+        <button onclick="keepPage()">Keep</button>
       </div>
     </div>
     <script src="game.js"></script>
+    <script>
+      // Hide the buttons if on a mobile device, as swipe gestures are used instead.
+      if (isMobile) {
+        document.querySelector(".buttons").style.display = "none";
+      }
+    </script>
   </body>
 </html>
