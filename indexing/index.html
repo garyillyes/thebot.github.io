@@ -1,100 +1,110 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Indexing Game</title>
-  <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      height: 100%;
-      background: #111;
-      font-family: sans-serif;
-      color: white;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-    }
-
-    #introScreen {
-      position: absolute;
-      inset: 0;
-      background: #111;
-      color: white;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      z-index: 10;
-    }
-
-    #gameCanvas {
-      background: #222;
-      display: block;
-      max-width: 100vw;
-      height: auto;
-    }
-
-    #scoreBoard {
-      margin: 10px 0;
-      font-size: 1.2rem;
-    }
-
-    .buttons {
-      margin-top: 10px;
-      display: flex;
-      gap: 20px;
-      justify-content: center;
-      flex-wrap: wrap;
-    }
-
-    .buttons button {
-      padding: 12px 24px;
-      font-size: 1.2rem;
-      background-color: #0ff;
-      border: none;
-      color: #000;
-      border-radius: 8px;
-      cursor: pointer;
-    }
-
-    .buttons button:hover {
-      background-color: #0cc;
-    }
-
-    @media (orientation: landscape) {
-      .buttons {
-        flex-direction: row;
-      }
-    }
-
-    @media (orientation: portrait) {
-      .buttons {
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Indexing Game</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background: #111;
+        font-family: sans-serif;
+        color: white;
+        display: flex;
         flex-direction: column;
+        justify-content: center;
+        align-items: center;
       }
-    }
-  </style>
-</head>
-<body>
-  <div id="introScreen">
-    <h1>Indexing</h1>
-    <p>Keep only high-quality, non-error pages with status code 200.</p>
-    <button onclick="startGame()">Start Game</button>
-  </div>
 
-  <canvas id="gameCanvas" width="640" height="360"></canvas>
+      #introScreen {
+        position: absolute;
+        inset: 0;
+        background: #111;
+        color: white;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 10;
+      }
 
-<div id="gameUI">
-  <div id="scorePanel" style="display: flex; gap: 20px; align-items: center;">
-    <div>Score: <span id="score">0</span></div>
-    <div>Time: <span id="timer">100</span></div>
-    <div id="combo" style="visibility: hidden; font-weight: bold;">Combo x1</div>
-  </div>
-</div>
+      #gameCanvas {
+        background: #222;
+        display: block;
+        max-width: 100vw;
+        height: auto;
+      }
 
+      #scoreBoard {
+        margin: 10px 0;
+        font-size: 1.2rem;
+      }
 
-  <script src="game.js"></script>
-</body>
+      .buttons {
+        margin-top: 10px;
+        display: flex;
+        gap: 20px;
+        justify-content: center;
+        flex-wrap: wrap;
+      }
+
+      .buttons button {
+        padding: 12px 24px;
+        font-size: 1.2rem;
+        background-color: #0ff;
+        border: none;
+        color: #000;
+        border-radius: 8px;
+        cursor: pointer;
+      }
+
+      .buttons button:hover {
+        background-color: #0cc;
+      }
+
+      @media (orientation: landscape) {
+        .buttons {
+          flex-direction: row;
+        }
+      }
+
+      @media (orientation: portrait) {
+        .buttons {
+          flex-direction: column;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="introScreen">
+      <h1>Indexing</h1>
+      <p>Keep only high-quality, non-error pages with status code 200.</p>
+      <button onclick="startGame()">Start Game</button>
+    </div>
+
+    <canvas id="gameCanvas" width="640" height="360"></canvas>
+    <div id="gameUI">
+      <div
+        id="scorePanel"
+        style="display: flex; gap: 20px; align-items: center"
+      >
+        <div>Score: <span id="score">0</span></div>
+        <div>Time: <span id="timer">100</span></div>
+        <div
+          id="combo"
+          style="visibility: hidden; font-weight: bold; color: yellow"
+        >
+          Combo x1
+        </div>
+      </div>
+      <div class="buttons">
+        <button onclick="keepPage()">Keep</button>
+        <button onclick="discardPage()">Discard</button>
+      </div>
+    </div>
+    <script src="game.js"></script>
+  </body>
 </html>
