@@ -13,7 +13,9 @@ let score = 0;
 let comboStreak = 0;
 let timeLeft = 100;
 let activePage = null;
-let gameInterval, timerInterval;
+let gameLoopId = null; // Will hold the requestAnimationFrame ID
+let lastFrameTime = 0;
+let timeSinceLastSecond = 0;
 let armAnimProgress = 0;
 let pagesSeen = 0;
 let correctDecisions = 0;
@@ -23,20 +25,256 @@ let targetGarbagePileScale = 1;
 let particles = []; // Array to hold active particles
 let lastDecision = null;
 let explanationBtn = null;
+let discardedPagesCount = 0;
+let trexWalkEventTriggered = false;
+let isGamePausedForEvent = false;
+let eventMessageDiv = null;
 
-// Constants for page tossing physics
-const PAGE_TOSS_GRAVITY = 0.8; // How fast the page falls (pixels/frame^2)
-const PAGE_TOSS_INITIAL_VERTICAL_VELOCITY = -15; // Initial upward velocity (pixels/frame)
+// --- Game Configuration ---
+const CONFIG = {
+  GAME_DURATION_SECONDS: 100,
+  PAGE_TOSS_GRAVITY: 0.8,
+  PAGE_TOSS_INITIAL_VERTICAL_VELOCITY: -15,
+  TREX_DIP_Y: 40,
+  TOSS_ANIM_DURATION_FRAMES: 25,
+  RETRACT_ANIM_DURATION_FRAMES: 30,
+  PILE_WIDTH_PERCENT: 0.18,
+  PILE_ASPECT_RATIO: 1.2,
+  PILE_MARGIN_PERCENT: 0.03,
+  CHEST_WIDTH_PERCENT: 0.18,
+  CHEST_ASPECT_RATIO: 1.2,
+  CHEST_MARGIN_PERCENT: 0.03,
+};
+
+// --- T-Rex Manipulator ---
+const trexSpriteImage = new Image();
+trexSpriteImage.src = "trex_sprite.png";
+
+// Sprite definition for T-Rex (based on HDPI from engine.js)
+const TREX_SPRITE_POS = { x: 1678, y: 2 }; // Top-left on sprite sheet
+const TREX_SPRITE_WIDTH = 88; // Width of a single frame on sprite sheet
+const TREX_SPRITE_HEIGHT = 94; // Height of a single frame on sprite sheet
+
+// Re-purposed animation frames for manipulator actions (HDPI)
+const TREX_ANIM_FRAMES = {
+  IDLE: { frames: [0, TREX_SPRITE_WIDTH], msPerFrame: 1000 / 3 }, // [open, blink]
+  RUNNING: {
+    frames: [TREX_SPRITE_WIDTH * 2, TREX_SPRITE_WIDTH * 3],
+    msPerFrame: 1000 / 12,
+  },
+  // Use the static jumping frame from engine.js for the toss action
+  TOSS: { frames: [0], msPerFrame: 1000 / 60 },
+};
+
+class TrexManipulator {
+  constructor(ctx) {
+    this.ctx = ctx;
+    this.x = 0;
+    this.y = 0;
+    this.width = 0; // Will be set by updateSize
+    this.height = 0; // Will be set by updateSize
+    this.currentFrame = 0;
+    this.animTimer = 0;
+    this.status = "IDLE";
+    this.frames = TREX_ANIM_FRAMES.IDLE.frames;
+    this.msPerFrame = TREX_ANIM_FRAMES.IDLE.msPerFrame;
+    this.isJumping = false;
+    this.jumpTimer = 0;
+    this.restingY = 0;
+    this.restingX = 0;
+
+    // Properties for blinking logic
+    this.blinkTimer = 0;
+    this.nextBlinkDelay = 0;
+    this.isBlinking = false;
+
+    // Properties for intro animation
+    this.isIntroRunning = false;
+    this.introTimer = 0;
+    this.introDuration = 2500; // ms
+
+    // Properties for mid-game walk animation
+    this.isWalkingToCenter = false;
+    this.walkToCenterTimer = 0;
+    this.walkToCenterDuration = 2000; // ms
+    this.onWalkComplete = null;
+
+    this.updateSize();
+    this.setNextBlinkDelay();
+  }
+
+  setNextBlinkDelay() {
+    // Randomly between 3 to 5 seconds (3000ms to 5000ms)
+    this.nextBlinkDelay = Math.random() * 2000 + 3000;
+  }
+
+  updateSize() {
+    this.height = this.ctx.canvas.height / 3;
+    const aspectRatio = TREX_SPRITE_WIDTH / TREX_SPRITE_HEIGHT;
+    this.width = this.height * aspectRatio;
+    this.restingX = this.ctx.canvas.width / 4 - this.width / 2;
+    if (!this.isIntroRunning) {
+      this.x = this.restingX;
+    }
+    this.restingY = this.ctx.canvas.height - this.height - 10;
+    if (!this.isJumping) {
+      this.y = this.restingY;
+    }
+  }
+
+  jump() {
+    if (!this.isJumping) {
+      this.isJumping = true;
+      this.jumpTimer = 0;
+      this.setStatus("TOSS");
+    }
+  }
+
+  startIntro() {
+    this.isIntroRunning = true;
+    this.introTimer = 0;
+    this.x = -this.width; // Start off-screen
+    this.setStatus("RUNNING");
+  }
+
+  walkToCenter(onComplete) {
+    if (this.isWalkingToCenter) return;
+    this.isWalkingToCenter = true;
+    this.walkToCenterTimer = 0;
+    this.onWalkComplete = onComplete;
+    this.setStatus("RUNNING");
+  }
+
+  update(deltaTime) {
+    // --- Intro Animation ---
+    if (this.isIntroRunning) {
+      this.introTimer += deltaTime;
+      const introProgress = Math.min(this.introTimer / this.introDuration, 1);
+      const startX = -this.width;
+      this.x = startX + (this.restingX - startX) * easeInOutSine(introProgress);
+
+      if (introProgress >= 1) {
+        this.isIntroRunning = false;
+        this.x = this.restingX;
+        this.setStatus("IDLE");
+      }
+    }
+
+    // --- Walk to Center Animation ---
+    if (this.isWalkingToCenter) {
+      this.walkToCenterTimer += deltaTime;
+      const progress = Math.min(
+        this.walkToCenterTimer / this.walkToCenterDuration,
+        1
+      );
+      const startX = this.restingX;
+      const endX = this.ctx.canvas.width / 3 - this.width / 2; // Move to 1/3 of canvas width
+      this.x = startX + (endX - startX) * easeInOutSine(progress);
+
+      if (progress >= 1) {
+        this.isWalkingToCenter = false;
+        this.restingX = endX;
+        this.x = this.restingX;
+        this.setStatus("IDLE");
+        if (this.onWalkComplete) this.onWalkComplete();
+      }
+    }
+
+    // --- Blinking/Frame Animation Logic ---
+    if (this.status === "IDLE") {
+      this.blinkTimer += deltaTime;
+      if (this.isBlinking) {
+        // A blink is short. After 150ms, stop blinking.
+        if (this.blinkTimer > 150) {
+          this.isBlinking = false;
+          this.blinkTimer = 0;
+          this.setNextBlinkDelay();
+        }
+      } else if (this.blinkTimer > this.nextBlinkDelay) {
+        // Time to blink.
+        this.isBlinking = true;
+        this.blinkTimer = 0;
+      }
+      // Set frame based on state. IDLE frames are [open, blink].
+      this.currentFrame = this.isBlinking ? 1 : 0;
+    } else {
+      // Regular animation for other states (e.g., TOSS)
+      this.animTimer += deltaTime;
+      if (this.animTimer >= this.msPerFrame) {
+        this.currentFrame = (this.currentFrame + 1) % this.frames.length;
+        this.animTimer = 0;
+      }
+    }
+
+    // --- Jump Position Logic ---
+    if (this.isJumping) {
+      this.jumpTimer += deltaTime;
+
+      const tossDurationMs = CONFIG.TOSS_ANIM_DURATION_FRAMES * (1000 / 60);
+      const retractDurationMs =
+        CONFIG.RETRACT_ANIM_DURATION_FRAMES * (1000 / 60);
+      const totalDurationMs = tossDurationMs + retractDurationMs;
+      const jumpPeakY = this.restingY - CONFIG.TREX_DIP_Y * 2;
+
+      if (this.jumpTimer <= tossDurationMs) {
+        const progress = easeInOutSine(this.jumpTimer / tossDurationMs);
+        this.y = this.restingY + (jumpPeakY - this.restingY) * progress;
+      } else if (this.jumpTimer <= totalDurationMs) {
+        const progress = easeInOutSine(
+          (this.jumpTimer - tossDurationMs) / retractDurationMs
+        );
+        this.y = jumpPeakY + (this.restingY - jumpPeakY) * progress;
+      } else {
+        this.isJumping = false;
+        this.y = this.restingY;
+        this.setStatus("IDLE");
+      }
+    }
+  }
+
+  setStatus(newStatus) {
+    if (this.status !== newStatus && TREX_ANIM_FRAMES[newStatus]) {
+      this.status = newStatus;
+      this.frames = TREX_ANIM_FRAMES[newStatus].frames;
+      this.msPerFrame = TREX_ANIM_FRAMES[newStatus].msPerFrame;
+      this.currentFrame = 0;
+      this.animTimer = 0;
+      if (newStatus === "IDLE") {
+        this.isBlinking = false;
+        this.blinkTimer = 0;
+        this.setNextBlinkDelay();
+      }
+    }
+  }
+
+  draw() {
+    if (!trexSpriteImage.complete) return;
+    const frameX = this.frames[this.currentFrame];
+    this.ctx.drawImage(
+      trexSpriteImage,
+      TREX_SPRITE_POS.x + frameX,
+      TREX_SPRITE_POS.y,
+      TREX_SPRITE_WIDTH,
+      TREX_SPRITE_HEIGHT,
+      this.x,
+      this.y,
+      this.width,
+      this.height
+    );
+  }
+}
+
+let trexManipulator = new TrexManipulator(ctx);
 
 function easeInOutSine(t) {
   return -(Math.cos(Math.PI * t) - 1) / 2;
 }
 
-const scrollImage = new Image();
-scrollImage.src = "scroll.png";
+const pageImage = new Image();
+pageImage.src = "page.png";
 
 const treasureChestImage = new Image();
-treasureChestImage.src = "treasure_chest.png";
+treasureChestImage.src = "database.png";
 
 const garbagePileImage = new Image();
 garbagePileImage.src = "garbage.png";
@@ -73,7 +311,7 @@ function startGame() {
   }
   score = 0;
   comboStreak = 0;
-  timeLeft = 100;
+  timeLeft = CONFIG.GAME_DURATION_SECONDS;
   pagesSeen = 0;
   correctDecisions = 0;
   incorrectDecisions = 0;
@@ -82,13 +320,20 @@ function startGame() {
   particles = []; // Clear particles on new game
   activePage = null;
   document.getElementById("score").textContent = score;
+  trexManipulator.updateSize(); // Recalculate size and position for new game
+  discardedPagesCount = 0;
+  trexWalkEventTriggered = false;
+  isGamePausedForEvent = false;
+  trexManipulator.startIntro();
   document.getElementById("timer").textContent = timeLeft;
   updateComboDisplay();
 }
 
 function endGame() {
-  clearInterval(gameInterval);
-  clearInterval(timerInterval);
+  if (gameLoopId) {
+    cancelAnimationFrame(gameLoopId);
+    gameLoopId = null;
+  }
 
   // Create a translucent overlay for the canvas
   const overlay = document.createElement("div");
@@ -168,7 +413,7 @@ function spawnPage() {
       : "-";
   armAnimProgress = 0;
   const pageHeight = canvas.height * 0.6;
-  const pageWidth = pageHeight * (180 / 252); // Maintain aspect ratio
+  const pageWidth = pageHeight * (393 / 269); // Maintain aspect ratio for new 393x269 image
 
   activePage = {
     statusCode,
@@ -189,13 +434,15 @@ function spawnPage() {
   };
 }
 
-function updateGame() {
+function updateGame(deltaTime) {
   // Animate garbage pile growth
-  garbagePileScale += (targetGarbagePileScale - garbagePileScale) * 0.1;
+  if (!isGamePausedForEvent) {
+    garbagePileScale += (targetGarbagePileScale - garbagePileScale) * 0.1;
+  }
   updateParticles(); // Update particle positions and states
 
   // --- Update game state first ---
-  if (activePage) {
+  if (activePage && !isGamePausedForEvent) {
     updatePageState(activePage);
     if (
       activePage.state === "scrollOut" &&
@@ -207,14 +454,15 @@ function updateGame() {
     }
   }
 
-  if (!activePage) spawnPage();
+  if (!activePage && !trexManipulator.isIntroRunning && !isGamePausedForEvent)
+    spawnPage();
 
   // --- Then draw everything ---
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   if (backgroundImage.complete) {
     ctx.drawImage(backgroundImage, 0, 0, canvas.width, canvas.height);
   }
-  drawRobotArm();
+  trexManipulator.draw();
   drawGarbagePile(); // Draw the garbage pile
   drawTreasureChest(); // Draw the treasure chest
   drawParticles(); // Draw particles on top of other elements
@@ -230,6 +478,8 @@ function updateGame() {
       drawSwipeCues(activePage);
     }
   }
+
+  trexManipulator.update(deltaTime);
 }
 
 function updatePageState(page) {
@@ -245,29 +495,31 @@ function updatePageState(page) {
 
     if (page._moveDirection === "discard") {
       // Target: Garbage pile area (bottom-left)
-      const pileWidth = canvas.width * 0.18;
-      const pileHeight = pileWidth / 1.2;
-      const pileX = canvas.width * 0.03;
-      const pileY = canvas.height - pileHeight;
+      const pileWidth = canvas.width * CONFIG.PILE_WIDTH_PERCENT;
+      const pileHeight = pileWidth / CONFIG.PILE_ASPECT_RATIO;
+      const pileX = canvas.width * CONFIG.PILE_MARGIN_PERCENT - 200; // Move left by another 100px
+      const pileY = canvas.height - pileHeight + 40; // Move down
       targetX = pileX + pileWidth / 2 + (Math.random() - 0.5) * 40; // Center of pile + random offset
       targetY = pileY + pileHeight / 2; // Aim for vertical middle of pile
       page.rotationSpeed = -(Math.random() * 0.2 + 0.05); // Random spin left
     } else {
       // Target: Treasure chest area (bottom-right)
-      const chestWidth = canvas.width * 0.18;
-      const chestHeight = chestWidth / 1.2;
-      const chestX = canvas.width - chestWidth - canvas.width * 0.03;
+      const chestWidth = canvas.width * CONFIG.CHEST_WIDTH_PERCENT;
+      const chestHeight = chestWidth / CONFIG.CHEST_ASPECT_RATIO;
+      const chestX =
+        canvas.width - chestWidth - canvas.width * CONFIG.CHEST_MARGIN_PERCENT;
       const chestY = canvas.height - chestHeight;
       targetX = chestX + chestWidth / 2 + (Math.random() - 0.5) * 40; // Center of chest + random offset
       targetY = chestY + chestHeight / 2; // Aim for vertical middle of chest
       page.rotationSpeed = Math.random() * 0.2 + 0.05; // Random spin right
     }
 
-    const g = PAGE_TOSS_GRAVITY;
-    const v0y = PAGE_TOSS_INITIAL_VERTICAL_VELOCITY;
+    const g = CONFIG.PAGE_TOSS_GRAVITY;
+    const v0y = CONFIG.PAGE_TOSS_INITIAL_VERTICAL_VELOCITY;
     const t = (-v0y + Math.sqrt(v0y * v0y + 2 * g * (targetY - startY))) / g;
     page.vx = (targetX - startX) / t;
     page.vy = v0y;
+    trexManipulator.jump();
     return; // Exit after setting up the toss
   }
 
@@ -287,6 +539,7 @@ function updatePageState(page) {
         100 +
         (pageTargetY - (canvas.height - 100)) * easedProgress;
       if (armAnimProgress >= 1) {
+        trexManipulator.setStatus("IDLE");
         page.state = "focus";
       }
       break;
@@ -304,10 +557,11 @@ function updatePageState(page) {
       // The page is waiting for user input. The decision is handled above the switch.
       break;
     case "scrollOut":
-      page.stateTimer++; // Increment the timer for the arm animation
+      page.stateTimer++;
       if (page.scale > 1) page.scale -= 0.01;
+
       // Apply physics
-      page.vy += PAGE_TOSS_GRAVITY; // Apply gravity
+      page.vy += CONFIG.PAGE_TOSS_GRAVITY; // Apply gravity
       page.x += page.vx; // Update X position
       page.y += page.vy; // Update Y position
       page.rotation += page.rotationSpeed; // Update rotation
@@ -315,179 +569,17 @@ function updatePageState(page) {
   }
 }
 
-function drawRobotArm() {
-  const shoulderX = canvas.width / 2;
-  const shoulderY = 0; // Fixed shoulder joint at top-center
-
-  // Arm segment lengths, relative to canvas height for responsiveness
-  const armSegmentLength1 = canvas.height * 0.3; // Upper arm
-  const armSegmentLength2 = canvas.height * 0.3; // Forearm
-
-  // --- Determine Target Position for the Gripper ---
-  let targetX = shoulderX;
-  let targetY = canvas.height / 2; // Default resting position
-
-  if (activePage) {
-    // Target the top-center of the page's final position
-    const pageRestingY = canvas.height / 2 - activePage.height / 2;
-    const pageRestingX = canvas.width / 2;
-
-    if (activePage.state === "intro") {
-      // Animate the target point during the intro animation
-      const easedProgress = easeInOutSine(armAnimProgress);
-      const startX = 60 + activePage.width / 2;
-      const startY = canvas.height - 100;
-      targetX = startX + (pageRestingX - startX) * easedProgress;
-      targetY = startY + (pageRestingY - startY) * easedProgress;
-    } else if (activePage.state === "scrollOut") {
-      const followThroughDuration = 25; // frames for follow-through
-      const retractDuration = 30; // frames for retraction
-
-      const releaseX = pageRestingX;
-      const releaseY = pageRestingY;
-
-      // Define the point the arm extends to during the toss.
-      // Scale toss animation distance based on canvas size for responsiveness.
-      const tossXOffset = canvas.width * 0.15; // 15% of canvas width
-      const tossYOffset = canvas.height * 0.15; // 15% of canvas height
-
-      const followThroughTargetX =
-        releaseX + (activePage._moveDirection === "discard" ? -tossXOffset : tossXOffset);
-      const followThroughTargetY = releaseY + tossYOffset;
-
-      // Default resting position for the arm
-      const restingArmX = shoulderX;
-      const restingArmY = canvas.height / 2;
-
-      const timer = activePage.stateTimer;
-
-      if (timer <= followThroughDuration) {
-        // Phase 1: Animate from release point to follow-through point
-        const progress = easeInOutSine(timer / followThroughDuration);
-        targetX = releaseX + (followThroughTargetX - releaseX) * progress;
-        targetY = releaseY + (followThroughTargetY - releaseY) * progress;
-      } else if (timer <= followThroughDuration + retractDuration) {
-        // Phase 2: Animate from follow-through point to resting position
-        const progress = easeInOutSine(
-          (timer - followThroughDuration) / retractDuration
-        );
-        targetX =
-          followThroughTargetX +
-          (restingArmX - followThroughTargetX) * progress;
-        targetY =
-          followThroughTargetY +
-          (restingArmY - followThroughTargetY) * progress;
-      } else {
-        // Animation finished, stay at resting position
-        targetX = restingArmX;
-        targetY = restingArmY;
-      }
-    } else {
-      // When in focus or other states, keep it above the page
-      targetX = pageRestingX;
-      targetY = pageRestingY;
-    }
-  }
-
-  // --- Inverse Kinematics Calculation ---
-  const dx = targetX - shoulderX;
-  const dy = targetY - shoulderY;
-  const dist = Math.sqrt(dx * dx + dy * dy);
-
-  // Check if the target is reachable
-  if (dist > armSegmentLength1 + armSegmentLength2) {
-    // Target is too far, stretch the arm towards it
-    const angle = Math.atan2(dy, dx);
-    const elbowX = shoulderX + armSegmentLength1 * Math.cos(angle);
-    const elbowY = shoulderY + armSegmentLength1 * Math.sin(angle);
-    drawArticulatedArm(shoulderX, shoulderY, elbowX, elbowY, targetX, targetY);
-    return;
-  }
-
-  // Law of Cosines to find elbow angle
-  const angle2_cos =
-    (dist * dist -
-      armSegmentLength1 * armSegmentLength1 -
-      armSegmentLength2 * armSegmentLength2) /
-    (2 * armSegmentLength1 * armSegmentLength2);
-  const angle2 = Math.acos(angle2_cos); // Elbow angle relative to the first segment
-
-  // Find shoulder angle
-  const angle1_base = Math.atan2(dy, dx);
-  const angle1_offset_cos =
-    (dist * dist +
-      armSegmentLength1 * armSegmentLength1 -
-      armSegmentLength2 * armSegmentLength2) /
-    (2 * dist * armSegmentLength1);
-  const angle1_offset = Math.acos(angle1_offset_cos);
-  const angle1 = angle1_base - angle1_offset; // Final shoulder angle
-
-  const elbowX = shoulderX + armSegmentLength1 * Math.cos(angle1);
-  const elbowY = shoulderY + armSegmentLength1 * Math.sin(angle1);
-
-  drawArticulatedArm(shoulderX, shoulderY, elbowX, elbowY, targetX, targetY);
-}
-
-function drawArticulatedArm(shoulderX, shoulderY, elbowX, elbowY, endX, endY) {
-  ctx.save();
-  ctx.strokeStyle = "#555"; // Darker metal color
-  ctx.fillStyle = "#888";
-  ctx.lineWidth = 20; // Thicker arm segments
-  ctx.lineCap = "round"; // Rounded ends for a softer look
-
-  // Draw arm segments
-  ctx.beginPath();
-  ctx.moveTo(shoulderX, shoulderY);
-  ctx.lineTo(elbowX, elbowY);
-  ctx.lineTo(endX, endY);
-  ctx.stroke();
-
-  // Draw joints as circles
-  ctx.beginPath();
-  ctx.arc(shoulderX, shoulderY, 15, 0, Math.PI * 2); // Shoulder joint
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(elbowX, elbowY, 15, 0, Math.PI * 2); // Elbow joint
-  ctx.fill();
-
-  // Draw a more detailed gripper
-  ctx.lineWidth = 8;
-  ctx.strokeStyle = "#444";
-  const gripperAngle = Math.atan2(endY - elbowY, endX - elbowX);
-  const gripperLength = 25;
-
-  // Gripper part 1
-  ctx.beginPath();
-  ctx.moveTo(endX, endY);
-  ctx.lineTo(
-    endX + gripperLength * Math.cos(gripperAngle + Math.PI / 4),
-    endY + gripperLength * Math.sin(gripperAngle + Math.PI / 4)
-  );
-  ctx.stroke();
-
-  // Gripper part 2
-  ctx.beginPath();
-  ctx.moveTo(endX, endY);
-  ctx.lineTo(
-    endX + gripperLength * Math.cos(gripperAngle - Math.PI / 4),
-    endY + gripperLength * Math.sin(gripperAngle - Math.PI / 4)
-  );
-  ctx.stroke();
-
-  ctx.restore();
-}
-
 function drawGarbagePile() {
   if (!garbagePileImage.complete) return; // Don't draw if the image hasn't loaded yet
 
   // Define garbage pile size and position relative to canvas dimensions
   // This ensures the pile scales with the game area
-  const pileWidth = canvas.width * 0.18; // Example: 18% of canvas width, similar to chest
-  const pileHeight = pileWidth / 1.2; // Assuming an aspect ratio of 1.2 (width:height)
+  const pileWidth = canvas.width * CONFIG.PILE_WIDTH_PERCENT;
+  const pileHeight = pileWidth / CONFIG.PILE_ASPECT_RATIO;
 
   // Base position for the pile
-  const baseX = canvas.width * 0.03; // 3% margin from left
-  const baseY = canvas.height - pileHeight; // Positioned at the bottom
+  const baseX = canvas.width * CONFIG.PILE_MARGIN_PERCENT - 200; // 3% margin from left, then offset by another 100px
+  const baseY = canvas.height - pileHeight + 40; // Positioned lower
 
   // Apply the dynamic scale
   const scaledWidth = pileWidth * garbagePileScale;
@@ -505,11 +597,12 @@ function drawTreasureChest() {
 
   // Define chest size and position relative to canvas dimensions
   // This ensures the chest scales with the game area
-  const chestWidth = canvas.width * 0.18; // Example: 18% of canvas width
-  const chestHeight = chestWidth / 1.2; // Assuming an aspect ratio of 1.2 (width:height)
+  const chestWidth = canvas.width * CONFIG.CHEST_WIDTH_PERCENT;
+  const chestHeight = chestWidth / CONFIG.CHEST_ASPECT_RATIO;
 
   // Position it in the bottom right corner with a small margin
-  const chestX = canvas.width - chestWidth - canvas.width * 0.03; // 3% margin from right
+  const chestX =
+    canvas.width - chestWidth - canvas.width * CONFIG.CHEST_MARGIN_PERCENT;
   const chestY = canvas.height - chestHeight; // Positioned at the bottom
 
   ctx.drawImage(treasureChestImage, chestX, chestY, chestWidth, chestHeight);
@@ -553,14 +646,14 @@ function drawPage(page) {
   ctx.scale(page.scale, page.scale);
   ctx.translate(-page.width / 2, -page.height / 2);
 
-  if (scrollImage.complete) {
-    ctx.drawImage(scrollImage, 0, 0, page.width, page.height);
+  if (pageImage.complete) {
+    ctx.drawImage(pageImage, 0, 0, page.width, page.height);
   } else {
     ctx.fillStyle = "#e3dcc5";
     ctx.fillRect(0, 0, page.width, page.height);
   }
 
-  const baseWidth = 180; // The original width for which the text was designed
+  const baseWidth = 393; // The original width for which the text was designed
   const scaleFactor = page.width / baseWidth;
 
   const paddingX = 35 * scaleFactor;
@@ -608,9 +701,10 @@ function drawParticles() {
 }
 
 function createTreasureBurstParticles() {
-  const chestWidth = canvas.width * 0.18;
-  const chestHeight = chestWidth / 1.2;
-  const chestX = canvas.width - chestWidth - canvas.width * 0.03;
+  const chestWidth = canvas.width * CONFIG.CHEST_WIDTH_PERCENT;
+  const chestHeight = chestWidth / CONFIG.CHEST_ASPECT_RATIO;
+  const chestX =
+    canvas.width - chestWidth - canvas.width * CONFIG.CHEST_MARGIN_PERCENT;
   const chestY = canvas.height - chestHeight;
   const centerX = chestX + chestWidth / 2;
   const centerY = chestY + chestHeight / 2;
@@ -665,6 +759,11 @@ function discardPage() {
   if (!activePage || activePage.state === "scrollOut") return;
   const { statusCode, isErrorPage } = activePage;
   if (!activePage._decisionMade) {
+    discardedPagesCount++;
+    if (discardedPagesCount >= 15 && !trexWalkEventTriggered) {
+      trexWalkEventTriggered = true; // Prevent re-triggering
+      triggerTrexWalkEvent();
+    }
     recordDecision(activePage, "discard");
     if (statusCode !== 200 || isErrorPage) {
       correctDecisions++;
@@ -680,6 +779,36 @@ function discardPage() {
     activePage._decisionMade = true;
     activePage._moveDirection = "discard";
   }
+}
+
+function triggerTrexWalkEvent() {
+  isGamePausedForEvent = true;
+
+  if (!eventMessageDiv) {
+    eventMessageDiv = document.createElement("div");
+    eventMessageDiv.id = "eventMessage";
+    Object.assign(eventMessageDiv.style, {
+      position: "absolute",
+      top: "30%",
+      left: "50%",
+      transform: "translateX(-50%)",
+      color: "white",
+      fontSize: "2em",
+      fontWeight: "bold",
+      textShadow: "2px 2px 4px #000",
+      zIndex: "100",
+      display: "none",
+    });
+    document.body.appendChild(eventMessageDiv);
+  }
+
+  eventMessageDiv.textContent = "hang on a second";
+  eventMessageDiv.style.display = "block";
+
+  trexManipulator.walkToCenter(() => {
+    isGamePausedForEvent = false;
+    eventMessageDiv.style.display = "none";
+  });
 }
 
 function recordDecision(page, action) {
@@ -776,6 +905,33 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "ArrowLeft") discardPage();
 });
 
+function gameLoop(timestamp) {
+  if (!lastFrameTime) {
+    lastFrameTime = timestamp;
+  }
+  const deltaTime = timestamp - lastFrameTime;
+  lastFrameTime = timestamp;
+
+  // Update game logic
+  updateGame(deltaTime);
+
+  // Update 1-second timer
+  if (!isGamePausedForEvent) {
+    timeSinceLastSecond += deltaTime;
+    if (timeSinceLastSecond >= 1000) {
+      timeLeft--;
+      document.getElementById("timer").textContent = timeLeft;
+      if (timeLeft <= 0) {
+        endGame();
+        return; // Stop the loop
+      }
+      timeSinceLastSecond -= 1000;
+    }
+  }
+
+  gameLoopId = requestAnimationFrame(gameLoop);
+}
+
 function animateCanvasResize(duration = 500) {
   const startHeight = canvas.height;
   const endHeight = window.innerHeight * 0.5;
@@ -785,19 +941,17 @@ function animateCanvasResize(duration = 500) {
     const currentHeight = startHeight + (endHeight - startHeight) * progress;
     canvas.height = currentHeight;
     canvas.width = window.innerWidth;
+    trexManipulator.updateSize(); // Update size and position on each frame
     canvas.style.position = "absolute";
     canvas.style.top = `${(window.innerHeight - currentHeight) / 2}px`;
     canvas.style.left = "0";
     if (progress < 1) requestAnimationFrame(animate);
     else {
       positionUIBelowCanvas();
-      // Start the game loop only after the canvas is in its final position
-      gameInterval = setInterval(updateGame, 1000 / 60);
-      timerInterval = setInterval(() => {
-        timeLeft--;
-        document.getElementById("timer").textContent = timeLeft;
-        if (timeLeft <= 0) endGame();
-      }, 1000);
+      // Start the main game loop
+      lastFrameTime = 0;
+      timeSinceLastSecond = 0;
+      gameLoopId = requestAnimationFrame(gameLoop);
     }
   }
   requestAnimationFrame(animate);
@@ -815,9 +969,15 @@ function positionUIBelowCanvas() {
   ui.style.justifyContent = "center";
 }
 
+function resizeCanvasToHalfHeight() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight * 0.5;
+}
+
 window.addEventListener("resize", () => {
-  if (gameInterval) {
+  if (gameLoopId) {
     resizeCanvasToHalfHeight();
+    trexManipulator.updateSize();
     positionUIBelowCanvas();
   }
 });
