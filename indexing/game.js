@@ -40,6 +40,7 @@ const CONFIG = {
   RETRACT_ANIM_DURATION_FRAMES: 30,
   PILE_WIDTH_PERCENT: 0.18,
   PILE_ASPECT_RATIO: 1.2,
+  PILE_HORIZONTAL_OFFSET_PERCENT: 0.17, // Percentage of canvas width to offset the pile
   PILE_MARGIN_PERCENT: 0.03,
   CHEST_WIDTH_PERCENT: 0.18,
   CHEST_ASPECT_RATIO: 1.2,
@@ -497,7 +498,9 @@ function updatePageState(page) {
       // Target: Garbage pile area (bottom-left)
       const pileWidth = canvas.width * CONFIG.PILE_WIDTH_PERCENT;
       const pileHeight = pileWidth / CONFIG.PILE_ASPECT_RATIO;
-      const pileX = canvas.width * CONFIG.PILE_MARGIN_PERCENT - 200; // Move left by another 100px
+      const pileX =
+        canvas.width *
+        (CONFIG.PILE_MARGIN_PERCENT - CONFIG.PILE_HORIZONTAL_OFFSET_PERCENT);
       const pileY = canvas.height - pileHeight + 40; // Move down
       targetX = pileX + pileWidth / 2 + (Math.random() - 0.5) * 40; // Center of pile + random offset
       targetY = pileY + pileHeight / 2; // Aim for vertical middle of pile
@@ -578,7 +581,9 @@ function drawGarbagePile() {
   const pileHeight = pileWidth / CONFIG.PILE_ASPECT_RATIO;
 
   // Base position for the pile
-  const baseX = canvas.width * CONFIG.PILE_MARGIN_PERCENT - 200; // 3% margin from left, then offset by another 100px
+  const baseX =
+    canvas.width *
+    (CONFIG.PILE_MARGIN_PERCENT - CONFIG.PILE_HORIZONTAL_OFFSET_PERCENT);
   const baseY = canvas.height - pileHeight + 40; // Positioned lower
 
   // Apply the dynamic scale
