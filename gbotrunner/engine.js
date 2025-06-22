@@ -44,6 +44,11 @@
     this.currentScore = 0;
     this.totalObstaclesHit = 0;
     this.criticalObstaclesHit = 0;
+    this.comboCounter = 0;
+    this.scoreMultiplier = 1;
+    this.highestComboMultiplier = 1; // New stat: Highest combo achieved
+    this.nightModeTriggerCount = 0; // New stat: Count of night mode triggers
+    this.specialsCollected = 0; // New stat: Count of special collectibles
 
     this.budget = 100;
     this.budgetBar = null;
@@ -612,17 +617,34 @@
               this.flashEffect.timer = 0;
               this.budget -= 1; //
               this.criticalObstaclesHit++; // Increment critical hits
+              // Reset combo on critical hit
+              this.comboCounter = 0;
+              this.scoreMultiplier = 1;
             }
 
             // Game logic based on obstacle value
             const value = hitObstacle.value;
             if (value === 200) {
+              if (hitObstacle.isSpecial) {
+                // Special 200 collectible: Counts as 5 for the combo, instantly raising the multiplier.
+                this.comboCounter += 5;
+                this.specialsCollected++; // Increment special collected count
+              } else {
+                this.comboCounter++;
+              }
+
+              this.scoreMultiplier = Math.floor(this.comboCounter / 5) + 1;
               if (this.nightModePermanent) {
                 this.nightModePermanent = false;
                 this.invert(true); // Turn off night mode
               }
-              this.currentScore += 1;
+              this.currentScore += 1 * this.scoreMultiplier;
               this.playSound(this.soundFx.SCORE);
+              // Update highest combo multiplier
+              this.highestComboMultiplier = Math.max(
+                this.highestComboMultiplier,
+                this.scoreMultiplier
+              );
               if (this.currentSpeed < this.config.MAX_SPEED) {
                 this.currentSpeed += 0.05;
               }
@@ -678,6 +700,38 @@
 
         if (playAchievementSound) {
           this.playSound(this.soundFx.SCORE);
+        }
+
+        // Draw combo multiplier if it's active
+        if (this.scoreMultiplier > 1) {
+          this.canvasCtx.save();
+
+          // --- Enhanced Combo Effect ---
+          // 1. Calculate glow and vibration based on multiplier
+          const glowIntensity = (this.scoreMultiplier - 1) * 4; // Glow increases with combo
+
+          // Cap vibration at the intensity of a 6x combo (multiplier - 1 = 5)
+          const vibrationIntensity = Math.min(this.scoreMultiplier - 1, 5);
+          // 2. Apply glow effect
+          this.canvasCtx.shadowColor = "#f0ad4e"; // Orange glow
+          this.canvasCtx.shadowBlur = glowIntensity;
+
+          // 3. Apply vibration effect
+          const xOffset = (Math.random() - 0.5) * 2 * vibrationIntensity;
+          const yOffset = (Math.random() - 0.5) * 2 * vibrationIntensity;
+
+          // 4. Set text properties
+          this.canvasCtx.font = "bold 18px Arial"; // Slightly larger font
+          this.canvasCtx.fillStyle = "#FFFFFF"; // Bright fill for better glow
+          this.canvasCtx.textAlign = "center";
+          this.canvasCtx.strokeStyle = "black";
+          this.canvasCtx.lineWidth = 2;
+          const comboText = `${this.scoreMultiplier}x COMBO`;
+          const xPos = this.dimensions.WIDTH / 2 + xOffset;
+          const yPos = 30 + yOffset;
+          this.canvasCtx.strokeText(comboText, xPos, yPos);
+          this.canvasCtx.fillText(comboText, xPos, yPos);
+          this.canvasCtx.restore();
         }
       }
 
@@ -775,6 +829,17 @@
       // Prevent native page scrolling whilst tapping on mobile.
       if (IS_MOBILE && this.playing) {
         e.preventDefault();
+      }
+
+      // Secret key press: Escape to end game (desktop only)
+      if (
+        e.keyCode === 27 /* Escape key */ &&
+        !IS_MOBILE &&
+        this.playing &&
+        !this.crashed
+      ) {
+        this.gameOver();
+        return; // Stop further processing of this keydown event
       }
 
       if (e.target != this.detailsButton) {
@@ -951,32 +1016,55 @@
       const modal = document.createElement("div");
       modal.id = "gameOverModal";
       Object.assign(modal.style, {
+        display: "flex", // Use flexbox for centering content
+        flexDirection: "column", // Stack items vertically
         position: "absolute",
         top: "50%",
         left: "50%",
         transform: "translate(-50%, -50%)",
         background: "rgba(0, 0, 0, 0.8)",
         color: "#fff",
-        padding: "30px",
+        padding: "20px 30px",
         borderRadius: "12px",
         textAlign: "center",
         zIndex: "1000",
-        maxWidth: "300px",
+        maxWidth: "320px",
         boxShadow: "0 0 20px rgba(0, 0, 0, 0.5)",
         fontFamily: "'Open Sans', sans-serif",
         fontSize: "16px",
+        maxHeight: "80vh", // Prevent growing off-screen
+        overflowY: "auto", // Add scrollbar if needed
+        lineHeight: "1.4", // Compact the lines
       });
 
       const collected200s = this.currentScore; // currentScore is 200s collected
       const budgetRemaining = Math.max(0, this.budget).toFixed(1); // Ensure it doesn't show negative
+      const highestCombo = this.highestComboMultiplier;
+      const nightModeCount = this.nightModeTriggerCount;
+      const specialsCount = this.specialsCollected;
 
       modal.innerHTML = `
-        <h2 style="margin-top: 0; color: #FFD700;">GAME OVER!</h2>
-        <p><strong>Score:</strong> ${collected200s}</p>
-        <p><strong>High Score:</strong> ${this.highestScore}</p>
-        <p><strong>Budget Remaining:</strong> ${budgetRemaining}%</p>
-        <p><strong>Total Obstacles Hit:</strong> ${this.totalObstaclesHit}</p>
-        <p><strong>Critical Hits (429+):</strong> ${this.criticalObstaclesHit}</p>
+        <h2 style="margin-top: 0; margin-bottom: 15px; color: #FFD700;">GAME OVER!</h2>
+        <div style="text-align: left;">
+          <p style="margin: 5px 0;"><strong>Score:</strong> ${collected200s}</p>
+          <p style="margin: 5px 0;"><strong>High Score:</strong> ${
+            this.highestScore
+          }</p>
+          <p style="margin: 5px 0;"><strong>Highest Combo:</strong> ${highestCombo}x</p>
+          <p style="margin: 5px 0;"><strong>Crawl Budget Left:</strong> ${budgetRemaining}%</p>          
+          <hr style="border-color: #444; margin: 10px 0;">
+          <p style="margin: 5px 0;"><strong>URLs Crawled:</strong> ${
+            this.totalObstaclesHit
+          }</p>
+          <p style="margin: 5px 0;"><strong>&#8594;Successfully:</strong> ${
+            this.totalObstaclesHit - this.criticalObstaclesHit - nightModeCount
+          }</p>
+          <p style="margin: 5px 0;"><strong>&#8594; Out of Which High Quality URLs:</strong> ${specialsCount}</p>
+          <p style="margin: 5px 0;"><strong>&#8594;Redirected Crawls:</strong> ${nightModeCount}</p>
+          <p style="margin: 5px 0;"><strong>&#8594;Error Crawls (429+):</strong> ${
+            this.criticalObstaclesHit
+          }</p>
+        </div>
         <button id="restartButton" style="
             background-color: #4CAF50;
             color: white;
@@ -1023,6 +1111,11 @@
         this.currentScore = 0;
         this.totalObstaclesHit = 0; // Reset new stat
         this.criticalObstaclesHit = 0; // Reset new stat
+        this.comboCounter = 0;
+        this.scoreMultiplier = 1;
+        this.highestComboMultiplier = 1; // Reset highest combo
+        this.nightModeTriggerCount = 0; // Reset night mode trigger count
+        this.specialsCollected = 0; // Reset specials collected count
         this.nightModePermanent = false;
         this.nightModeTimer = 0;
         this.budget = 100;
@@ -1115,10 +1208,16 @@
       } else {
         // When called without reset, we always want to turn it ON.
         this.playSound(this.soundFx.NIGHT_MODE);
-        this.inverted = document.body.classList.toggle(
+        const wasInvertedBefore = this.inverted;
+        const classAdded = document.body.classList.toggle(
           Runner.classes.INVERTED,
           true
         );
+        this.inverted = classAdded; // Update the internal state
+        // Increment counter only if night mode was successfully turned ON (wasn't already on)
+        if (!wasInvertedBefore && this.inverted) {
+          this.nightModeTriggerCount++;
+        }
       }
     },
   };
@@ -1397,12 +1496,14 @@
     dimensions,
     gapCoefficient,
     speed,
-    opt_xOffset
+    opt_xOffset,
+    isSpecial
   ) {
     this.canvasCtx = canvasCtx;
     this.spritePos = spriteImgPos;
     this.value = value;
     this.stringValue = String(this.value);
+    this.isSpecial = isSpecial || false;
     this.gapCoefficient = gapCoefficient;
     this.dimensions = dimensions;
     this.remove = false;
@@ -1411,6 +1512,14 @@
     this.width = 0;
     this.collisionBoxes = [];
     this.gap = 0;
+    this.initialXPos = this.xPos;
+
+    if (this.isSpecial) {
+      this.originalYPos = 0;
+      // Sine wave parameters for zigzag motion
+      this.zigzagAmplitude = 10; // Vertical distance from center line. Reduced for better control.
+      this.zigzagWavelength = 250; // Horizontal distance for a full wave. Larger is slower.
+    }
 
     this.init(speed);
   }
@@ -1452,9 +1561,39 @@
           Runner.config.BOTTOM_PAD -
           Trex.config.MAX_JUMP_HEIGHT;
 
-        // The obstacle's yPos (top edge) should be between tRexHighestHeadY (highest)
-        // and groundLevelY - this.height (lowest, where obstacle is on the ground).
-        this.yPos = getRandomNum(tRexHighestHeadY, groundLevelY - this.height);
+        if (this.isSpecial) {
+          // Special collectibles fly in a zigzag pattern and must be jumped for.
+          // We need to calculate a base Y position that keeps the entire
+          // zigzag path within a catchable, high-flying range.
+
+          // Top of the T-Rex's head when on the ground.
+          const tRexTopOnGround =
+            this.dimensions.HEIGHT -
+            Trex.config.HEIGHT -
+            Runner.config.BOTTOM_PAD;
+
+          // The collectible must be catchable at its highest zigzag point.
+          // Its bottom must be below the T-Rex's top at jump peak.
+          // (originalY - amplitude) + height > tRexHighestHeadY
+          const minOriginalY =
+            tRexHighestHeadY - this.height + this.zigzagAmplitude + 1;
+
+          // The collectible must be uncatchable on the ground at its lowest point.
+          // Its bottom must be above the T-Rex's head on the ground.
+          // (originalY + amplitude) + height < tRexTopOnGround
+          const maxOriginalY =
+            tRexTopOnGround - this.height - this.zigzagAmplitude - 1;
+
+          this.yPos = getRandomNum(minOriginalY, maxOriginalY);
+          this.originalYPos = this.yPos;
+        } else {
+          // The obstacle's yPos (top edge) should be between tRexHighestHeadY (highest)
+          // and groundLevelY - this.height (lowest, where obstacle is on the ground).
+          this.yPos = getRandomNum(
+            tRexHighestHeadY,
+            groundLevelY - this.height
+          );
+        }
 
         // Create a single collision box for the whole number.
         this.collisionBoxes.push(
@@ -1469,6 +1608,12 @@
        * Draw and crop based on size.
        */
       draw: function () {
+        if (this.isSpecial) {
+          this.canvasCtx.save();
+          this.canvasCtx.shadowColor = "#f0ad4e"; // Use the same orange as combo text
+          this.canvasCtx.shadowBlur = 10;
+        }
+
         const dimensions = DistanceMeter.dimensions;
         const digitWidth = dimensions.WIDTH;
         const digitHeight = dimensions.HEIGHT;
@@ -1503,6 +1648,10 @@
             digitHeight
           );
         }
+
+        if (this.isSpecial) {
+          this.canvasCtx.restore();
+        }
       },
 
       /**
@@ -1513,6 +1662,14 @@
       update: function (deltaTime, speed) {
         if (!this.remove) {
           this.xPos -= ((speed * FPS) / 1000) * deltaTime;
+
+          if (this.isSpecial) {
+            const phase =
+              (this.initialXPos - this.xPos) / this.zigzagWavelength;
+            this.yPos =
+              this.originalYPos +
+              Math.sin(phase * 2 * Math.PI) * this.zigzagAmplitude;
+          }
           this.draw();
 
           if (!this.isVisible()) {
@@ -2839,6 +2996,12 @@
         200, 200, 200, 200, 301, 302, 404, 410, 418, 429, 500, 503,
       ];
       const value = statusCodes[Math.floor(Math.random() * statusCodes.length)];
+      var isSpecial = false;
+
+      // 7.5% chance for a 200-point collectible to be a special zigzag one.
+      if (value === 200 && Math.random() < 0.075) {
+        isSpecial = true;
+      }
 
       // Use the TEXT_SPRITE for drawing the numbers.
       const textSpritePos = this.spritePos.TEXT_SPRITE;
@@ -2846,11 +3009,13 @@
       this.obstacles.push(
         new Obstacle(
           this.canvasCtx,
-          value, // Pass the numeric value instead of a type object
+          value,
           textSpritePos,
           this.dimensions,
           this.gapCoefficient,
-          currentSpeed
+          currentSpeed,
+          null, // opt_xOffset
+          isSpecial // isSpecial flag
         )
       );
     },
