@@ -63,7 +63,9 @@
     this.crashed = false;
     this.paused = false;
     this.inverted = false;
-    this.invertTimer = 0;
+    this.nightModePermanent = false;
+    this.nightModeTimer = 0;
+    this.NIGHT_MODE_DURATION_TEMP = 5000; // 5 seconds
     this.resizeTimerId_ = null;
 
     this.playCount = 0;
@@ -201,6 +203,7 @@
     BUTTON_PRESS: "offline-sound-press",
     HIT: "offline-sound-hit",
     SCORE: "offline-sound-reached",
+    NIGHT_MODE: "offline-sound-nightmode",
   };
 
   /**
@@ -611,22 +614,33 @@
               this.criticalObstaclesHit++; // Increment critical hits
             }
 
-            // Speed reduction logic (only for 5xx)
-            if (hitObstacle.value >= 500) {
-              // Corrected from 429
-              this.currentSpeed -= 0.5;
-              this.playSound(this.soundFx.HIT);
-              // No score change for 5xx, but speed penalty
-            } else if (hitObstacle.value === 200) {
-              this.currentScore += 1; // Increase score by 1 for 200
-              this.playSound(this.soundFx.SCORE); // Play score sound
-              // Increase speed slightly on collecting a '200'
+            // Game logic based on obstacle value
+            const value = hitObstacle.value;
+            if (value === 200) {
+              if (this.nightModePermanent) {
+                this.nightModePermanent = false;
+                this.invert(true); // Turn off night mode
+              }
+              this.currentScore += 1;
+              this.playSound(this.soundFx.SCORE);
               if (this.currentSpeed < this.config.MAX_SPEED) {
                 this.currentSpeed += 0.05;
               }
+            } else if (value === 301) {
+              this.nightModePermanent = true;
+              if (!this.inverted) this.invert(); // Turn on night mode
+            } else if (value === 302) {
+              this.nightModePermanent = false;
+              this.nightModeTimer = 0; // Reset timer
+              if (!this.inverted) this.invert(); // Turn on night mode
             } else {
-              this.playSound(this.soundFx.HIT); // Play hit sound for 3xx and 400-418
+              // For all other obstacles (other 3xx, 4xx, 5xx)
+              if (value >= 500) {
+                this.currentSpeed -= 0.5;
+              }
+              this.playSound(this.soundFx.HIT);
             }
+
             this.horizon.removeFirstObstacle(); // Remove the obstacle after collision
             vibrate(200); // Vibrate on any hit
           }
@@ -675,26 +689,12 @@
         }
 
         // Night mode.
-        if (this.invertTimer > this.config.INVERT_FADE_DURATION) {
-          this.invertTimer = 0;
-          this.invertTrigger = false;
-          this.invert();
-        } else if (this.invertTimer) {
-          this.invertTimer += deltaTime;
-        } else {
-          var actualDistance = this.distanceMeter.getActualDistance(
-            Math.ceil(this.currentScore)
-          );
-
-          if (actualDistance > 0) {
-            this.invertTrigger = !(
-              actualDistance % this.config.INVERT_DISTANCE
-            );
-
-            if (this.invertTrigger && this.invertTimer === 0) {
-              this.invertTimer += deltaTime;
-              this.invert();
-            }
+        // Handle temporary night mode (from 302 collectibles)
+        if (this.inverted && !this.nightModePermanent) {
+          this.nightModeTimer += deltaTime;
+          if (this.nightModeTimer >= this.NIGHT_MODE_DURATION_TEMP) {
+            this.nightModeTimer = 0;
+            this.invert(true); // Turn off night mode
           }
         }
       }
@@ -1023,6 +1023,8 @@
         this.currentScore = 0;
         this.totalObstaclesHit = 0; // Reset new stat
         this.criticalObstaclesHit = 0; // Reset new stat
+        this.nightModePermanent = false;
+        this.nightModeTimer = 0;
         this.budget = 100;
         this.setSpeed(this.config.SPEED);
         this.time = getTimeStamp();
@@ -1109,12 +1111,13 @@
     invert: function (reset) {
       if (reset) {
         document.body.classList.toggle(Runner.classes.INVERTED, false);
-        this.invertTimer = 0;
         this.inverted = false;
       } else {
+        // When called without reset, we always want to turn it ON.
+        this.playSound(this.soundFx.NIGHT_MODE);
         this.inverted = document.body.classList.toggle(
           Runner.classes.INVERTED,
-          this.invertTrigger
+          true
         );
       }
     },
@@ -1229,115 +1232,6 @@
   function getTimeStamp() {
     return IS_IOS ? new Date().getTime() : performance.now();
   }
-
-  //******************************************************************************
-
-  /**
-   * Game over panel.
-   * @param {!HTMLCanvasElement} canvas
-   * @param {Object} textImgPos
-   * @param {Object} restartImgPos
-   * @param {!Object} dimensions Canvas dimensions.
-   * @constructor
-   */
-  function GameOverPanel(canvas, textImgPos, restartImgPos, dimensions) {
-    this.canvas = canvas;
-    this.canvasCtx = canvas.getContext("2d");
-    this.canvasDimensions = dimensions;
-    this.textImgPos = textImgPos;
-    this.restartImgPos = restartImgPos;
-    this.draw();
-  }
-
-  /**
-   * Dimensions used in the panel.
-   * @enum {number}
-   */
-  GameOverPanel.dimensions = {
-    TEXT_X: 0,
-    TEXT_Y: 13,
-    TEXT_WIDTH: 191,
-    TEXT_HEIGHT: 11,
-    RESTART_WIDTH: 36,
-    RESTART_HEIGHT: 32,
-  };
-
-  GameOverPanel.prototype = {
-    /**
-     * Update the panel dimensions.
-     * @param {number} width New canvas width.
-     * @param {number} opt_height Optional new canvas height.
-     */
-    updateDimensions: function (width, opt_height) {
-      this.canvasDimensions.WIDTH = width;
-      if (opt_height) {
-        this.canvasDimensions.HEIGHT = opt_height;
-      }
-    },
-
-    /**
-     * Draw the panel.
-     */
-    draw: function () {
-      var dimensions = GameOverPanel.dimensions;
-
-      var centerX = this.canvasDimensions.WIDTH / 2;
-
-      // Game over text.
-      var textSourceX = dimensions.TEXT_X;
-      var textSourceY = dimensions.TEXT_Y;
-      var textSourceWidth = dimensions.TEXT_WIDTH;
-      var textSourceHeight = dimensions.TEXT_HEIGHT;
-
-      var textTargetX = Math.round(centerX - dimensions.TEXT_WIDTH / 2);
-      var textTargetY = Math.round((this.canvasDimensions.HEIGHT - 25) / 3);
-      var textTargetWidth = dimensions.TEXT_WIDTH;
-      var textTargetHeight = dimensions.TEXT_HEIGHT;
-
-      var restartSourceWidth = dimensions.RESTART_WIDTH;
-      var restartSourceHeight = dimensions.RESTART_HEIGHT;
-      var restartTargetX = centerX - dimensions.RESTART_WIDTH / 2;
-      var restartTargetY = this.canvasDimensions.HEIGHT / 2;
-
-      if (IS_HIDPI) {
-        textSourceY *= 2;
-        textSourceX *= 2;
-        textSourceWidth *= 2;
-        textSourceHeight *= 2;
-        restartSourceWidth *= 2;
-        restartSourceHeight *= 2;
-      }
-
-      textSourceX += this.textImgPos.x;
-      textSourceY += this.textImgPos.y;
-
-      // Game over text from sprite.
-      this.canvasCtx.drawImage(
-        Runner.imageSprite,
-        textSourceX,
-        textSourceY,
-        textSourceWidth,
-        textSourceHeight,
-        textTargetX,
-        textTargetY,
-        textTargetWidth,
-        textTargetHeight
-      );
-
-      // Restart button.
-      this.canvasCtx.drawImage(
-        Runner.imageSprite,
-        this.restartImgPos.x,
-        this.restartImgPos.y,
-        restartSourceWidth,
-        restartSourceHeight,
-        restartTargetX,
-        restartTargetY,
-        dimensions.RESTART_WIDTH,
-        dimensions.RESTART_HEIGHT
-      );
-    },
-  };
 
   //******************************************************************************
 
