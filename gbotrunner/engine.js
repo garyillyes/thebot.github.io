@@ -24,11 +24,45 @@
     this.detailsButton = this.outerContainerEl.querySelector("#details-button");
 
     // Set start message for desktop; mobile is now the default in HTML.
+    var messageBox = document.getElementById("messageBox");
     if (!IS_MOBILE) {
-      var messageBox = document.getElementById("messageBox");
       if (messageBox) {
         messageBox.querySelector("h1").textContent = "Press Space to start";
       }
+    }
+
+    // Add "How to Play" icon button to the start screen.
+    if (messageBox) {
+      const helpButton = document.createElement("button");
+      helpButton.innerText = "?";
+      Object.assign(helpButton.style, {
+        position: "absolute",
+        top: "40px",
+        right: "20px",
+        width: "24px",
+        height: "24px",
+        padding: "0",
+        fontSize: "16px",
+        fontWeight: "bold",
+        cursor: "pointer",
+        border: "2px solid #eee",
+        borderRadius: "50%",
+        background: "#f0f0f0",
+        color: "#555",
+        boxShadow: "0 2px 5px rgba(0,0,0,0.2)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        lineHeight: "1",
+      });
+
+      // Add event listener to show the modal
+      helpButton.addEventListener("click", (e) => {
+        e.stopPropagation(); // Prevent game from starting
+        this.showHelpModal();
+      });
+
+      messageBox.appendChild(helpButton);
     }
 
     this.config = opt_config || Runner.config;
@@ -993,6 +1027,102 @@
     },
 
     /**
+     * Shows the help modal with game mechanics.
+     */
+    showHelpModal: function () {
+      if (document.getElementById("helpModal") || this.playing) {
+        return; // Modal already open or game has started
+      }
+
+      const modal = document.createElement("div");
+      modal.id = "helpModal";
+      Object.assign(modal.style, {
+        display: "flex",
+        flexDirection: "column",
+        position: "absolute",
+        top: "50%",
+        left: "50%",
+        transform: "translate(-50%, -50%)",
+        background: "rgba(0, 0, 0, 0.85)",
+        color: "#fff",
+        padding: "20px 30px",
+        borderRadius: "12px",
+        textAlign: "left",
+        zIndex: "1001", // Higher than game over modal
+        maxWidth: "450px",
+        boxShadow: "0 0 20px rgba(0, 0, 0, 0.5)",
+        fontFamily: "'Open Sans', sans-serif",
+        fontSize: "15px",
+        lineHeight: "1.5",
+      });
+
+      const modalContent = `
+        <h2 style="margin-top: 0; margin-bottom: 15px; color: #f0ad4e; text-align: center;">How to Play</h2>
+        <div style="margin-bottom: 15px">
+          <p style="margin-top: 0; margin-bottom: 5px">
+            <strong>Objective:</strong> Crawl as many URLs with 200 status code as
+            possible while also managing your crawl budget.
+          </p>
+          <p>You'll encounter a lot of different URL status codes:</p>
+          <ul style="padding-left: 20px; margin: 0">
+            <li>
+              <strong>OK (200):</strong> They're good URLs and increase your score. The
+              more of them you collect consecutively, the faster you crawl becomes, and
+              higher your combo multiplier climbs (more points per URL!). Some of these
+              URLs are special, watch out for them! Slightly chip away from your crawl
+              budget.
+            </li>
+            <li>
+              <strong>Redirects (3xx):</strong> They temporarily or permenantly redirect
+              you to another realm. They don't score you anything, but like 200s, they
+              slightly chip away from your crawl budget.
+            </li>
+            <li>
+              <strong>Client Errors (4xx):</strong> Crawling these will do nothing at
+              all; they're just annoying.
+            </li>
+            <li>
+              <strong>Server Errors (429, 5xx):</strong> Hitting these will slow you
+              down and greatly decrease your crawl budget.
+            </li>
+          </ul>
+          <p>
+            The game ends when you run out of crawl budget or you collect enough server
+            errors that you come to a complete halt.
+          </p>
+        </div>
+        <button id="closeHelpButton" style="
+            background-color: #f44336;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 10px;
+            align-self: center;
+        ">Close</button>
+      `;
+      modal.innerHTML = modalContent;
+
+      this.outerContainerEl.appendChild(modal);
+
+      const closeButton = document.getElementById("closeHelpButton");
+
+      // Define the close function to handle removal and cleanup
+      const closeModal = (e) => {
+        e.stopPropagation();
+        if (document.getElementById("helpModal")) {
+          this.outerContainerEl.removeChild(modal);
+        }
+        // Clean up listener to prevent memory leaks
+        closeButton.removeEventListener("click", closeModal);
+      };
+
+      closeButton.addEventListener("click", closeModal);
+    },
+
+    /**
      * Game over state.
      */
     gameOver: function () {
@@ -1056,12 +1186,12 @@
           <p style="margin: 5px 0;"><strong>URLs Crawled:</strong> ${
             this.totalObstaclesHit
           }</p>
-          <p style="margin: 5px 0;"><strong>&#8594;Successfully:</strong> ${
+          <p style="margin: 5px 0;"><strong>&#8594; Successfully:</strong> ${
             this.totalObstaclesHit - this.criticalObstaclesHit - nightModeCount
           }</p>
           <p style="margin: 5px 0;"><strong>&#8594; Out of Which High Quality URLs:</strong> ${specialsCount}</p>
-          <p style="margin: 5px 0;"><strong>&#8594;Redirected Crawls:</strong> ${nightModeCount}</p>
-          <p style="margin: 5px 0;"><strong>&#8594;Error Crawls (429+):</strong> ${
+          <p style="margin: 5px 0;"><strong>&#8594; Redirected Crawls:</strong> ${nightModeCount}</p>
+          <p style="margin: 5px 0;"><strong>&#8594; Error Crawls (429+):</strong> ${
             this.criticalObstaclesHit
           }</p>
         </div>
