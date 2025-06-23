@@ -9,6 +9,7 @@ document.body.style.webkitUserSelect = "none";
 document.body.style.msUserSelect = "none";
 document.body.style.MozUserSelect = "none";
 
+let gameState = "LOADING"; // LOADING, INSTRUCTIONS, RUNNING, ENDED
 let score = 0;
 let comboStreak = 0;
 let timeLeft = 100;
@@ -89,6 +90,7 @@ class TrexManipulator {
     this.isBlinking = false;
 
     // Properties for intro animation
+    this.onIntroComplete = null;
     this.isIntroRunning = false;
     this.introTimer = 0;
     this.introDuration = 2500; // ms
@@ -98,6 +100,10 @@ class TrexManipulator {
     this.walkToCenterTimer = 0;
     this.walkToCenterDuration = 2000; // ms
     this.onWalkComplete = null;
+
+    // Properties for disappointed eyes effect
+    this.showDisappointedEyes = false;
+    this.disappointedEyesTimer = 0;
 
     this.updateSize();
     this.setNextBlinkDelay();
@@ -130,11 +136,12 @@ class TrexManipulator {
     }
   }
 
-  startIntro() {
+  startIntro(onComplete) {
     this.isIntroRunning = true;
     this.introTimer = 0;
     this.x = -this.width; // Start off-screen
     this.setStatus("RUNNING");
+    this.onIntroComplete = onComplete;
   }
 
   walkToCenter(onComplete) {
@@ -157,6 +164,10 @@ class TrexManipulator {
         this.isIntroRunning = false;
         this.x = this.restingX;
         this.setStatus("IDLE");
+        if (this.onIntroComplete) {
+          this.onIntroComplete();
+          this.onIntroComplete = null;
+        }
       }
     }
 
@@ -230,6 +241,14 @@ class TrexManipulator {
         this.setStatus("IDLE");
       }
     }
+
+    // --- Disappointed Eyes Timer ---
+    if (this.showDisappointedEyes) {
+      this.disappointedEyesTimer -= deltaTime;
+      if (this.disappointedEyesTimer <= 0) {
+        this.showDisappointedEyes = false;
+      }
+    }
   }
 
   setStatus(newStatus) {
@@ -261,6 +280,58 @@ class TrexManipulator {
       this.width,
       this.height
     );
+
+    if (this.showDisappointedEyes) {
+      this.drawDisappointedEyes();
+    }
+  }
+
+  drawDisappointedEyes() {
+    const scaleX = this.width / TREX_SPRITE_WIDTH;
+    const scaleY = this.height / TREX_SPRITE_HEIGHT;
+
+    // Using corrected pixel values, scaled to current T-Rex size
+    const rightEyeY = this.y + 20 * scaleY;
+    const leftEyeY = rightEyeY - 2 * scaleY; // Move left eye up by 2px (lesser Y value)
+    const leftEyeX = this.x + 40 * scaleX;
+    const rightEyeX = leftEyeX + 21 * scaleX;
+
+    // Define eye sizes, also scaled
+    const rightEyeRadius = 4 * scaleX; // Right eye is bigger
+    const leftEyeRadius = 2.5 * scaleX; // Left eye is smaller
+    const rightIrisRadius = 2 * scaleX;
+    const leftIrisRadius = 1 * scaleX;
+
+    // --- Draw Left Eye ---
+    this.ctx.fillStyle = "white";
+    this.ctx.strokeStyle = "black";
+    this.ctx.lineWidth = 1 * scaleX;
+    this.ctx.beginPath();
+    this.ctx.arc(leftEyeX, leftEyeY, leftEyeRadius, 0, Math.PI * 2);
+    this.ctx.fill();
+    this.ctx.stroke();
+    // Iris
+    this.ctx.fillStyle = "black";
+    this.ctx.beginPath();
+    this.ctx.arc(leftEyeX, leftEyeY, leftIrisRadius, 0, Math.PI * 2);
+    this.ctx.fill();
+
+    // --- Draw Right Eye ---
+    this.ctx.fillStyle = "white";
+    this.ctx.beginPath();
+    this.ctx.arc(rightEyeX, rightEyeY, rightEyeRadius, 0, Math.PI * 2);
+    this.ctx.fill();
+    this.ctx.stroke();
+    // Iris
+    this.ctx.fillStyle = "black";
+    this.ctx.beginPath();
+    this.ctx.arc(rightEyeX, rightEyeY, rightIrisRadius, 0, Math.PI * 2);
+    this.ctx.fill();
+  }
+
+  showDisappointment() {
+    this.showDisappointedEyes = true;
+    this.disappointedEyesTimer = 1500; // Show for 1.5 seconds
   }
 }
 
@@ -303,33 +374,50 @@ function handleSwipeGesture() {
 }
 
 function startGame() {
-  document.getElementById("introScreen").style.display = "none";
-  document.getElementById("gameUI").style.display = "block";
-  animateCanvasResize();
+  gameState = "INSTRUCTIONS"; // Set state immediately
+
+  // Reset all game variables
   if (!explanationBtn) {
     createExplanationButton();
   }
   score = 0;
   comboStreak = 0;
-  timeLeft = CONFIG.GAME_DURATION_SECONDS;
   pagesSeen = 0;
   correctDecisions = 0;
   incorrectDecisions = 0;
   garbagePileScale = 1;
   targetGarbagePileScale = 1;
-  particles = []; // Clear particles on new game
+  particles = [];
   activePage = null;
-  document.getElementById("score").textContent = score;
-  trexManipulator.updateSize(); // Recalculate size and position for new game
   discardedPagesCount = 0;
   trexWalkEventTriggered = false;
   isGamePausedForEvent = false;
-  trexManipulator.startIntro();
-  document.getElementById("timer").textContent = timeLeft;
+
+  // Set canvas to final size immediately and position UI (which is hidden)
+  resizeCanvasToHalfHeight();
+  trexManipulator.updateSize();
+  positionUIBelowCanvas();
+
+  // Update display elements
+  document.getElementById("score").textContent = score;
+  document.getElementById("timer").textContent = CONFIG.GAME_DURATION_SECONDS;
   updateComboDisplay();
+
+  // Start T-Rex intro and show modal simultaneously
+  trexManipulator.startIntro();
+  showInstructionsModal();
+
+  // Start the main render loop
+  if (gameLoopId) {
+    cancelAnimationFrame(gameLoopId);
+  }
+  lastFrameTime = 0;
+  timeSinceLastSecond = 0;
+  gameLoopId = requestAnimationFrame(gameLoop);
 }
 
 function endGame() {
+  gameState = "ENDED";
   if (gameLoopId) {
     cancelAnimationFrame(gameLoopId);
     gameLoopId = null;
@@ -384,6 +472,56 @@ function endGame() {
     startGame();
   };
   document.getElementById("gameUI").style.display = "none";
+}
+
+function showInstructionsModal() {
+  const modal = document.createElement("div");
+  modal.id = "instructionsModal";
+  Object.assign(modal.style, {
+    position: "fixed",
+    top: "50%",
+    left: "50%",
+    transform: "translate(-50%, -50%)",
+    background: "#222",
+    color: "#fff",
+    padding: "30px",
+    borderRadius: "12px",
+    textAlign: "center",
+    zIndex: "1000",
+    maxWidth: "450px",
+    border: "2px solid #0ff",
+  });
+
+  modal.innerHTML = `
+    <h2 style="margin-top:0; color: #0ff;">How to Play</h2>
+    <p style="text-align: left; margin-bottom: 20px;">
+      Your job is to sort web pages. A T-Rex will present them to you one by one.
+    </p>
+    <ul style="text-align: left; padding-left: 20px; margin-bottom: 20px;">
+      <li><strong>KEEP</strong> good pages (Status 200, no errors).</li>
+      <li><strong>DISCARD</strong> bad pages (any other status, or errors).</li>
+    </ul>
+    <p style="margin-bottom: 25px;">
+      Use <strong>Arrow Keys</strong> or <strong>Swipe</strong> left/right.
+      <br>Score as many points as you can before the timer runs out!
+    </p>
+    <button id='runGameBtn' style="padding: 12px 24px; font-size: 1.2rem; background-color: #0ff; border: none; color: #000; border-radius: 8px; cursor: pointer;">Start Game</button>
+  `;
+
+  document.body.appendChild(modal);
+  document.getElementById("runGameBtn").onclick = () => {
+    document.body.removeChild(modal);
+    beginGameplay();
+  };
+}
+
+function beginGameplay() {
+  gameState = "RUNNING";
+  timeLeft = CONFIG.GAME_DURATION_SECONDS; // Reset timer
+  document.getElementById("timer").textContent = timeLeft;
+  lastFrameTime = performance.now(); // Reset frame timer to avoid a large jump
+  timeSinceLastSecond = 0;
+  document.getElementById("gameUI").style.display = "flex"; // Make UI visible
 }
 
 function updateComboDisplay() {
@@ -454,17 +592,26 @@ function updateGame(deltaTime) {
     }
   }
 
-  if (!activePage && !trexManipulator.isIntroRunning && !isGamePausedForEvent)
+  if (
+    gameState === "RUNNING" &&
+    !activePage &&
+    !trexManipulator.isIntroRunning &&
+    !isGamePausedForEvent
+  )
     spawnPage();
 
   // --- Then draw everything ---
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  if (backgroundImage.complete) {
+  // Only draw the full background when the game is actually running
+  if (gameState !== "INSTRUCTIONS" && backgroundImage.complete) {
     ctx.drawImage(backgroundImage, 0, 0, canvas.width, canvas.height);
   }
   trexManipulator.draw();
-  drawGarbagePile(); // Draw the garbage pile
-  drawTreasureChest(); // Draw the treasure chest
+  // Only draw game elements when the game is not in the instruction phase
+  if (gameState !== "INSTRUCTIONS") {
+    drawGarbagePile();
+    drawTreasureChest();
+  }
   drawParticles(); // Draw particles on top of other elements
 
   if (activePage) {
@@ -747,6 +894,7 @@ function keepPage() {
     } else {
       incorrectDecisions++;
       comboStreak = 0;
+      trexManipulator.showDisappointment();
     }
     document.getElementById("score").textContent = score;
     updateComboDisplay();
@@ -773,6 +921,7 @@ function discardPage() {
     } else {
       incorrectDecisions++;
       comboStreak = 0;
+      trexManipulator.showDisappointment();
     }
     document.getElementById("score").textContent = score;
     updateComboDisplay();
@@ -912,18 +1061,18 @@ function gameLoop(timestamp) {
   const deltaTime = timestamp - lastFrameTime;
   lastFrameTime = timestamp;
 
-  // Update game logic
+  // Always update visuals
   updateGame(deltaTime);
 
-  // Update 1-second timer
-  if (!isGamePausedForEvent) {
+  // Update 1-second timer only when game is running
+  if (gameState === "RUNNING" && !isGamePausedForEvent) {
     timeSinceLastSecond += deltaTime;
     if (timeSinceLastSecond >= 1000) {
       timeLeft--;
       document.getElementById("timer").textContent = timeLeft;
       if (timeLeft <= 0) {
         endGame();
-        return; // Stop the loop
+        return; // Stop the loop by not requesting the next frame
       }
       timeSinceLastSecond -= 1000;
     }
@@ -932,38 +1081,12 @@ function gameLoop(timestamp) {
   gameLoopId = requestAnimationFrame(gameLoop);
 }
 
-function animateCanvasResize(duration = 500) {
-  const startHeight = canvas.height;
-  const endHeight = window.innerHeight * 0.5;
-  const startTime = performance.now();
-  function animate(time) {
-    const progress = Math.min((time - startTime) / duration, 1);
-    const currentHeight = startHeight + (endHeight - startHeight) * progress;
-    canvas.height = currentHeight;
-    canvas.width = window.innerWidth;
-    trexManipulator.updateSize(); // Update size and position on each frame
-    canvas.style.position = "absolute";
-    canvas.style.top = `${(window.innerHeight - currentHeight) / 2}px`;
-    canvas.style.left = "0";
-    if (progress < 1) requestAnimationFrame(animate);
-    else {
-      positionUIBelowCanvas();
-      // Start the main game loop
-      lastFrameTime = 0;
-      timeSinceLastSecond = 0;
-      gameLoopId = requestAnimationFrame(gameLoop);
-    }
-  }
-  requestAnimationFrame(animate);
-}
-
 function positionUIBelowCanvas() {
   const ui = document.getElementById("gameUI");
   ui.style.position = "absolute";
   ui.style.top = `${canvas.offsetTop + canvas.height + 20}px`;
   ui.style.left = "50%";
   ui.style.transform = "translateX(-50%)";
-  ui.style.display = "flex";
   ui.style.flexDirection = "column";
   ui.style.alignItems = "center";
   ui.style.justifyContent = "center";
