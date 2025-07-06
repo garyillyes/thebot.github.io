@@ -489,13 +489,13 @@ function showInstructionsModal() {
     textAlign: "center",
     zIndex: "1000",
     maxWidth: "450px",
-    border: "2px solid #0ff",
+    border: "2px solid #ddd",
   });
 
   modal.innerHTML = `
-    <h2 style="margin-top:0; color: #0ff;">How to Play</h2>
+    <h2 style="margin-top:0; color: #ddd;">How to Play</h2>
     <p style="text-align: left; margin-bottom: 20px;">
-      Your job is to sort web pages. A T-Rex will present them to you one by one.
+      Your job is to sort web pages that Googlebot previously crawled.
     </p>
     <ul style="text-align: left; padding-left: 20px; margin-bottom: 20px;">
       <li><strong>KEEP</strong> good pages (Status 200, no errors).</li>
@@ -504,8 +504,9 @@ function showInstructionsModal() {
     <p style="margin-bottom: 25px;">
       Use <strong>Arrow Keys</strong> or <strong>Swipe</strong> left/right.
       <br>Score as many points as you can before the timer runs out!
+      <br>Consequtive correct decisions increase your combo multipler!
     </p>
-    <button id='runGameBtn' style="padding: 12px 24px; font-size: 1.2rem; background-color: #0ff; border: none; color: #000; border-radius: 8px; cursor: pointer;">Start Game</button>
+    <button id='runGameBtn' style="padding: 12px 24px; font-size: 1.2rem; background-color: #ddd; border: none; color: #000; border-radius: 8px; cursor: pointer;">Start Game</button>
   `;
 
   document.body.appendChild(modal);
@@ -811,11 +812,11 @@ function drawPage(page) {
   ctx.fillStyle = "#000";
   ctx.font = `${fontSize}px monospace`;
   ctx.fillText(`Status: ${page.statusCode}`, paddingX, startY);
-  ctx.fillText(
-    `Error: ${page.isErrorPage ? "Yes" : "No"}`,
-    paddingX,
-    startY + lineHeight
-  );
+  const isErrorText = function () {
+    if (page.statusCode === 200) return page.isErrorPage ? "Yes" : "No";
+    return "No";
+  };
+  ctx.fillText(`Soft Error: ${isErrorText()}`, paddingX, startY + lineHeight);
   ctx.fillText(`Quality: ${page.quality}`, paddingX, startY + lineHeight * 2);
   ctx.restore();
 }
