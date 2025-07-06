@@ -2,415 +2,46 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>Robot Collector Game</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HTTP 200 Status Code</title>
     <style>
       body {
-        margin: 0;
-        overflow: hidden;
-        font-family: Arial;
-        background-color: #cccccc;
+        font-family: sans-serif;
+        line-height: 1.6;
+        margin: 20px;
+        max-width: 800px;
+        margin-left: auto;
+        margin-right: auto;
       }
-
-      canvas {
-        display: block;
-        background: #cccccc;
+      h1 {
+        color: #333;
       }
-
-      #hud,
-      #pauseText,
-      #startScreen,
-      #pauseBtn {
-        position: absolute;
-        color: #111;
-        font-size: 1.5em;
-        font-family: Arial;
-        z-index: 10;
-      }
-
-      #hud {
-        top: 10px;
-        left: 10px;
-      }
-
-      #pauseText {
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        display: none;
-        font-size: 2em;
-      }
-
-      #startScreen {
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(255, 255, 255, 0.9);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        text-align: center;
-        padding: 2em;
-        box-sizing: border-box;
-      }
-
-      #pauseBtn {
-        top: 10px;
-        right: 10px;
-        background: #eee;
-        padding: 0.5em 1em;
-        border-radius: 10px;
-        border: 1px solid #aaa;
-        cursor: pointer;
-        user-select: none;
-      }
-      #budgetBarContainer {
-        width: 200px;
-        height: 20px;
-        background-color: #ddd;
-        border: 1px solid #999;
-        border-radius: 10px;
-        margin-top: 10px;
-        overflow: hidden;
-      }
-
-      #budgetBar {
-        height: 100%;
-        width: 100%;
-        background-color: #76c7c0;
-        transition: width 0.2s ease;
+      p {
+        margin-bottom: 1em;
       }
     </style>
   </head>
-
   <body>
-    <div id="hud">
-      <div>Score: <span id="score">0</span></div>
-      <div id="budgetBarContainer">
-        <div id="budgetBar"></div>
-      </div>
-    </div>
-    <div id="pauseText">Paused</div>
-    <div id="startScreen">
-      <div>
-        <h1>scrolling bot</h1>
-        <p>fetch stuff!</p>
-        <p>Useful fetches speed you up and give you a point.</p>
-        <p>Irrelevant fetches don't give you a point but consume the budget.</p>
-        <p>Server errors slow you down and also don't give a point.</p>
-        <p>
-          Jump: <strong>Space / Tap Left</strong> &nbsp;&nbsp; Duck:
-          <strong>Arrow Down / Touch Right</strong> &nbsp;&nbsp; Pause:
-          <strong>P / Button</strong>
-        </p>
-        <p>Press any key or tap to start!</p>
-      </div>
-    </div>
-    <div id="pauseBtn">Pause</div>
-    <canvas id="gameCanvas"></canvas>
+    <h1>Search games</h1>
+    <p>Games currently available:</p>
 
-    <script>
-      const canvas = document.getElementById("gameCanvas");
-      const ctx = canvas.getContext("2d");
-      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-      ctx.canvas.width = window.innerWidth;
-      ctx.canvas.height = isMobile
-        ? window.innerHeight * 0.8
-        : window.innerHeight / 2;
-
-      const cloudImage = new Image();
-      cloudImage.src = "cloud.png";
-
-      const robotImage = new Image();
-      robotImage.src = "robot.png";
-
-      const groundHeight = 60; // Updated from 120 to 60 to bring ground closer to bottom
-      let paused = false;
-      let started = false;
-
-      const robot = {
-        x: 100,
-        y: 0,
-        width: 90,
-        height: 120,
-        vy: 0,
-        jumpPower: -10,
-        gravity: 0.6,
-        onGround: true,
-        ducking: false,
-        normalHeight: 120,
-        duckHeight: 60,
-      };
-
-      function getGroundLevel(h) {
-        return canvas.height - groundHeight - h;
-      }
-
-      // Responsive position after canvas height change
-      robot.y = getGroundLevel(robot.height);
-
-      let items = [];
-      let clouds = [];
-      let speed = 3;
-      let score = 0;
-      let budgetPercent = 100; // in percent
-
-      let gameOver = false;
-      let frameCount = 0;
-      let skylineOffset = 0;
-      const skylineSpeed = 0.5; // slower than item speed
-
-      const return_2xx = [200];
-      const return_3xx = [301, 302, 307, 308];
-      const return_4xx = [400, 403, 404, 410];
-      const return_5xx = [500, 503];
-      const itemValues = [return_2xx, return_3xx, return_4xx, return_5xx];
-
-      const numClouds = Math.floor(window.innerWidth / 200);
-      for (let i = 0; i < numClouds; i++) {
-        clouds.push({
-          x: Math.random() * canvas.width,
-          y: Math.random() * 100,
-          width: 120 + Math.random() * 60,
-          height: 120,
-          speed: 0.2 + Math.random() * 0.2,
-        });
-      }
-
-      function spawnItem() {
-        const value_cat =
-          itemValues[Math.floor(Math.random() * itemValues.length)];
-        const is500 = speed > 5 && Math.random() < 0.3;
-        const finalValue = is500
-          ? 500
-          : value_cat[[Math.floor(Math.random() * value_cat.length)]];
-        const baseY = getGroundLevel(90); // closer to robot's height
-        const offset = Math.random() * 120;
-        const randomY = baseY - offset;
-        items.push({
-          x: canvas.width + 5,
-          y: randomY,
-          width: 30,
-          height: 30,
-          value: finalValue,
-        });
-      }
-
-      function update() {
-        if (!started || gameOver || paused) return;
-
-        robot.vy += robot.gravity;
-        robot.y += robot.vy;
-
-        const targetHeight = robot.ducking
-          ? robot.duckHeight
-          : robot.normalHeight;
-        const groundLevel = getGroundLevel(targetHeight);
-
-        if (robot.y >= groundLevel) {
-          robot.y = groundLevel;
-          robot.vy = 0;
-          robot.onGround = true;
-        } else {
-          robot.onGround = false;
-        }
-
-        robot.height = targetHeight;
-
-        for (let i = items.length - 1; i >= 0; i--) {
-          const item = items[i];
-          item.x -= speed;
-
-          if (
-            robot.x < item.x + item.width &&
-            robot.x + robot.width > item.x &&
-            robot.y < item.y + item.height &&
-            robot.y + robot.height > item.y
-          ) {
-            // Decrease budget based on value range
-            if (item.value === 200) {
-              score += 1;
-              speed += 0.5;
-              budgetPercent -= 0.5;
-            } else if (item.value >= 300 && item.value < 400) {
-              budgetPercent -= 0.2;
-            } else if (item.value >= 400 && item.value < 500) {
-              budgetPercent -= 0.1;
-            } else if (item.value === 500) {
-              speed = Math.max(0, speed - 0.5);
-              budgetPercent -= 1.0;
-            }
-
-            items.splice(i, 1);
-          }
-        }
-
-        for (let cloud of clouds) {
-          cloud.x -= cloud.speed;
-          if (cloud.x + cloud.width < 0) {
-            cloud.x = canvas.width + Math.random() * 100;
-            cloud.y = Math.random() * 100;
-          }
-        }
-
-        if (budgetPercent <= 0 || speed <= 0) {
-          gameOver = true;
-          alert("Game Over!");
-        }
-
-        document.getElementById("score").innerText = score;
-        document.getElementById("budgetBar").style.width = `${Math.max(
-          0,
-          budgetPercent
-        )}%`;
-
-        frameCount++;
-        if (frameCount % 60 === 0) spawnItem();
-      }
-
-      function drawSkyline(y) {
-        skylineOffset -= skylineSpeed;
-        if (skylineOffset <= -canvas.width) {
-          skylineOffset = 0;
-        }
-
-        ctx.save();
-        ctx.globalAlpha = 0.3; // Simulates haze
-        ctx.fillStyle = "#bbb"; // Lighter grey for distance
-
-        const skylineHeights = [30, 50, 70, 40, 60, 35];
-        const buildingWidth = 60;
-        const totalBuildings = Math.ceil(canvas.width / buildingWidth) + 2;
-
-        for (let pass = 0; pass < 2; pass++) {
-          for (let i = 0; i < totalBuildings; i++) {
-            const height = skylineHeights[i % skylineHeights.length];
-            const x = i * buildingWidth + skylineOffset + pass * canvas.width;
-            ctx.fillRect(x, y - height, buildingWidth - 10, height);
-          }
-        }
-
-        ctx.restore();
-      }
-
-      function draw() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        // Sky gradient background
-        const skyGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-        skyGradient.addColorStop(0, "#cccccc");
-        skyGradient.addColorStop(1, "#eeeeee");
-        ctx.fillStyle = skyGradient;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        // Clouds
-        for (let cloud of clouds) {
-          ctx.drawImage(
-            cloudImage,
-            cloud.x,
-            cloud.y,
-            cloud.width,
-            cloud.height
-          );
-        }
-
-        // Horizon line
-        const horizonY = canvas.height - groundHeight;
-        ctx.strokeStyle = "#999";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(0, horizonY);
-        ctx.lineTo(canvas.width, horizonY);
-        ctx.stroke();
-        // City skyline silhouette (parallax)
-        drawSkyline(horizonY);
-
-        // Ground
-        const groundGradient = ctx.createLinearGradient(
-          0,
-          horizonY,
-          0,
-          canvas.height
-        );
-        groundGradient.addColorStop(0, "#eeeeee");
-        groundGradient.addColorStop(1, "#cccccc");
-        ctx.fillStyle = groundGradient;
-        ctx.fillRect(0, horizonY, canvas.width, groundHeight);
-
-        // Robot
-        ctx.drawImage(robotImage, robot.x, robot.y, robot.width, robot.height);
-
-        // Falling item numbers
-        for (let item of items) {
-          ctx.fillStyle = "#111";
-          ctx.font = "20px Arial";
-          ctx.fillText(item.value, item.x, item.y + item.height);
-        }
-      }
-
-      function loop() {
-        update();
-        draw();
-        if (!gameOver) requestAnimationFrame(loop);
-      }
-
-      document.addEventListener("keydown", (e) => {
-        if (!started) {
-          started = true;
-          document.getElementById("startScreen").style.display = "none";
-          loop();
-          return;
-        }
-        if (e.code === "Space" && robot.onGround && !robot.ducking) {
-          robot.vy = robot.jumpPower;
-        }
-        if (e.code === "ArrowDown") {
-          robot.ducking = true;
-        }
-        if (e.code === "KeyP") {
-          paused = !paused;
-          document.getElementById("pauseText").style.display = paused
-            ? "block"
-            : "none";
-        }
-      });
-
-      document.addEventListener("keyup", (e) => {
-        if (e.code === "ArrowDown") {
-          robot.ducking = false;
-        }
-      });
-
-      document.getElementById("pauseBtn").addEventListener("click", () => {
-        paused = !paused;
-        document.getElementById("pauseText").style.display = paused
-          ? "block"
-          : "none";
-      });
-
-      document.addEventListener("touchstart", (e) => {
-        if (!started) {
-          started = true;
-          document.getElementById("startScreen").style.display = "none";
-          loop();
-          return;
-        }
-        const touchX = e.touches[0].clientX;
-        const halfWidth = window.innerWidth / 2;
-        if (touchX < halfWidth && robot.onGround && !robot.ducking) {
-          robot.vy = robot.jumpPower;
-        } else {
-          robot.ducking = true;
-        }
-      });
-
-      document.addEventListener("touchend", (e) => {
-        robot.ducking = false;
-      });
-
-      robotImage.onload = () => {
-        // Waits for key press or tap to start
-      };
-    </script>
+    <p>
+      <a href="https://garyillyes.github.io/thebot.github.io/gbotrunner/"
+        ><strong>Googlebot runner</strong></a
+      >: source available in the
+      <a
+        href="https://github.com/garyillyes/thebot.github.io/tree/main/gbotrunner"
+        >games repository</a
+      >.
+    </p>
+    <p>
+      <a href="https://garyillyes.github.io/thebot.github.io/indexing/"
+        ><strong>Indexing decision</strong></a
+      >: source available in the
+      <a
+        href="https://github.com/garyillyes/thebot.github.io/tree/main/indexing"
+        >games repository</a
+      >.
+    </p>
   </body>
 </html>
